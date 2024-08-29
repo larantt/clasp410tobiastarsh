@@ -4,7 +4,7 @@ Lara Tobias-Tarsh (laratt@umich.edu)
 
 This repository contains the classwork and lab work for CLaSP 410 (Fall 2024)
 
-This repository is structured as follows:
+The repository is structured as follows:
 
 ```
 CLASP410TOBIASTARSH
