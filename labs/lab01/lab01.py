@@ -1,4 +1,23 @@
 #!/usr/bin/env python3
+"""
+lab01.py
+
+Author : Lara Tobias-Tarsh
+Last Modified : 9/11/24
+
+The lab demonstrates how the principle of universality can be used to simulate a number of scenarios, 
+in this case the spread of forest fires or diseases.
+
+File contains the functions to execute a number of test simulations to prove this. To execute
+this file, simply run:
+
+```
+python3 lab01.py
+```
+"""
+#############
+## IMPORTS ##
+#############
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
@@ -9,30 +28,19 @@ plt.ion()
 #############
 ## GLOBALS ##
 #############
-nx,ny = 10,7 
-prob_spread = 0.7 # Chance to spread to adjacent cells.
-prob_bare = 0.0   # Chance of cell to start as bare patch.
-prob_start = 0.1  # Chance of cell to start on fire.
-prob_die = 0.5    # Probability a cell dies
-TEST = False      # should the simulation be run in test mode.
 outpath = '/Users/laratobias-tarsh/Documents/fa24/clasp410tobiastarsh/labs/lab01/figures'
-
-# user inputs
-run_name = f'test_{nx}x{ny}_disease' # directory name to save figures
-
 # cell values
 dead = 0
 immune = 1
 healthy = 2
 spreading = 3
-
 # Generate our custom segmented color map for this project.
 forest_cmap = ListedColormap(['tan', 'lightsteelblue', 'darkgreen', 'crimson'])
 
 ###############
 ## FUNCTIONS ##
 ###############
-def decide_fate(p_die=prob_die,immune=immune,dead=dead):
+def decide_fate(p_die,immune=immune,dead=dead):
     """
     Function decides the fate of a given cell in simulation
 
@@ -59,7 +67,7 @@ def decide_fate(p_die=prob_die,immune=immune,dead=dead):
     else:
         return immune # yay! you lived!
 
-def spread(matrix, p_spread=prob_spread, p_death=prob_die, avail=healthy, spreader=spreading, immune=immune, dead=dead):
+def spread(matrix, p_spread, p_death, avail=healthy, spreader=spreading, immune=immune, dead=dead):
     """
     function finds the indices of all adjacent cells to the burning/infectious cell.
 
@@ -177,33 +185,29 @@ def initialise_simulation(ni,nj,p_start,p_bare,bare=immune,spreader=spreading,he
     # return initial state of the simulation
     return initial_matrix
 
-def visualise_current_state(matrix,step):
-    fig, ax = plt.subplots(1, 1)
-    contour = ax.matshow(matrix, vmin=0, vmax=3,cmap=forest_cmap)
-    ax.set_title(f'Iteration = {step:03d}')
+def visualise_current_state(matrix,step,run_name):
+    """
+    Function visualises the forest fire spread, mostly
+    used for testing purposes, and writes it to file.
+
+    Parameters
+    ----------
+    matrix : np.ndarray
+        matrix at a given step in the simulation
+    step : int
+        step of the simulation that the matrix is on
+    """
+    fig, ax = plt.subplots(1, 1) # set up the figure
+    contour = ax.matshow(matrix, vmin=0, vmax=3,cmap=forest_cmap) # plot the forest
+    ax.set_title(f'Iteration = {step:03d}',loc='left') # set title
     plt.colorbar(contour, ax=ax)
 
+    # make directory to save plots if it doesn't already exist
     Path(f'{outpath}/{run_name}').mkdir(parents=True, exist_ok=True)
+    # save the figure at each iteration
     fig.savefig(f'{outpath}/{run_name}/step_{step}.png')
 
-def main():
-    # initialise forest
-    current_state = initialise_simulation(nx,ny,prob_start,prob_bare,testing=TEST)
-    
-    niters = 0
-    visualise_current_state(current_state,niters)
-    # keep looping til no cells can are spreaders
-    while 3 in current_state:
-        niters += 1  # keep count
-        # spread!!!
-        current_state = spread(current_state)
-        visualise_current_state(current_state,niters)
-        
-        
-    return current_state
-
-
-def question_one(nx,ny,prob_spread=1.0,prob_bare=0,prob_die=1.0):
+def question_one(nx,ny,prob_spread=1.0,prob_die=1.0):
     """
     Simulation for question 1, which is a 3x3 test forest
 
@@ -218,7 +222,35 @@ def question_one(nx,ny,prob_spread=1.0,prob_bare=0,prob_die=1.0):
         number of cells in the simulation grid in y direction
     prob_spread : float
         probability of fire spreading
-    
-    """
+        defaults to 1.0 for this experiment because always spreads
+    prob_die : float
+        probability of a burning cell "dying" (named due to universality)
+        defaults to 1.0 for this experiment because the tree always burns
+        to the ground
 
-current_state = main()
+    Return
+    ------
+    current_state : np.ndarray
+        final state of the forest after all iterations
+    """
+    # set path to save file
+    run_name = f'test_{nx}x{ny}_forest' # directory name to save figures
+    # initialise forest
+    # set arbitrary start and bare probabilities, as testing=True will override them
+    current_state = initialise_simulation(nx,ny,1.0,1.0,testing=True)
+    
+    niters = 0
+    visualise_current_state(current_state,niters,run_name)
+    # keep looping til no cells can are spreaders
+    while 3 in current_state:
+        niters += 1  # keep count
+        # spread!!!
+        current_state = spread(current_state,prob_spread,prob_die)
+        visualise_current_state(current_state,niters,run_name)
+        
+        
+    return current_state
+
+
+simulation_1 = question_one(3,3)
+simulation_2 = question_one(3,4)
