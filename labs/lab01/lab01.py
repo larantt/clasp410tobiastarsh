@@ -53,6 +53,102 @@ FOREST_CMAP = {
 ## FUNCTIONS ##
 ###############
 
+def format_twin_axes(axis,twin_axis,lines,ylabels,xlabel,left_title=None,right_title=None):
+    """
+    Helper function to nicely format twin axes and avoid lots of
+    ugly boilerplate code in the plotting sections. Designed to be
+    portable across many applications.
+
+    Does not support more than one axes twin because i am morally
+    opposed to doing this and it is not readable or interpretable.
+
+    Note, contains a local function to make extra axes invisible called
+    make_patch_spines_invisible(). This is documented in the local function.
+
+    Inspiration for this function is from this Stack Exchange post:
+    https://stackoverflow.com/questions/58337823/matplotlib-how-to-display-and-position-2-yaxis-both-on-the-left-side-of-my-grap
+
+    Parameters
+    ----------
+    axis : mpl.axes
+        main axes object for figure
+    twin_axis : mpl.axes
+        axes object with twin y axis
+
+
+    """
+    def make_patch_spines_invisible(ax):
+        """
+        Local helper function to make extra axes spines invisible and give
+        more control over formatting.
+
+        Parameters
+        ----------
+        ax : mp.axes
+            axis to hide spines on
+        """
+        ax.set_frame_on(True)
+        ax.patch.set_visible(False)
+        for sp in ax.spines.values():
+            sp.set_visible(False)
+
+    labkw = dict(size=14,weight='bold') # dictionary formats the axes labels to look nice
+    tkw = dict(size=4, width=3) # dictionary formats the tick labels to look good
+
+    # first hide all the spines on each axis so they can be manually recreated more nicely
+    make_patch_spines_invisible(axis)
+    make_patch_spines_invisible(twin_axis)
+
+    # move the y twin next to the original y axis
+    axis.spines["left"].set_position(("axes", -0.01))
+    twin_axis.spines["left"].set_position(("axes", -0.1))
+
+    # turn the original bottom axes back on
+    axis.spines['bottom'].set_visible(True)
+    # make spines bold because it looks pretty
+    axis.spines['bottom'].set_linewidth(3)
+    # make spines grey because it looks pretty
+    tkw = dict(size=4, width=3) # dictionary formats the tick labels to look good
+    axis.tick_params(axis='x', colors="#3b3b3b", **tkw)
+    axis.spines['bottom'].set_color("#3b3b3b")
+    axis.xaxis.label.set_color("#3b3b3b")
+    # set the xlabel
+    axis.set_xlabel(f'{xlabel}',c="#3b3b3b",**labkw)
+
+
+    # now, loop over the axes and format nicely
+    for ax,line,ylab in zip([axis,twin_axis],lines,ylabels):
+        # turn on the axes as appropriate
+        ax.spines["left"].set_visible(True)
+        ax.yaxis.set_label_position('left')
+        ax.yaxis.set_ticks_position('left')
+
+        # make the axes thicker bc it looks pretty
+        ax.spines['left'].set_linewidth(3)
+
+        # set the colors and ticks to match the lines
+        ax.spines['left'].set_color(line.get_color())
+        ax.yaxis.label.set_color(line.get_color())
+        ax.tick_params(axis='y', colors=line.get_color(), **tkw)
+
+        # set the x label and y label to match the lines
+        ax.set_ylabel(ylab,c=line.get_color(), **labkw)
+        
+        # force axes to start at 0
+        ax.set_xlim(left=0)
+        ax.set_ylim(bottom=0)
+
+    # set titles
+    if left_title:
+        axis.set_title(f'{left_title}',fontsize=19,fontweight='bold',loc='left',x=-0.1,y=1.07)
+    if right_title:
+        axis.set_title(f'{right_title}',fontsize=14,fontweight='bold',loc='right',y=1.07)
+
+    # plot legend
+    legend_props = {"size" : 14, "weight" : 'bold'}
+    axis.legend(lines, [l.get_label() for l in lines], frameon=False, labelcolor='#3b3b3b',
+                loc='upper left',prop=legend_props,bbox_to_anchor=(-0.12,1.079),ncols=2)
+        
 def spread(matrix, p_spread, p_death):
     """
     function finds the indices of all adjacent cells to the burning/infectious cell.
@@ -351,12 +447,14 @@ def question_two(nx,ny,fixed_prob=0.0,prob_to_vary='spread'):
             # keep initial conditions constant with fixed_prob    
             current_state = initialise_simulation(nx,ny,prob_start,fixed_prob)
             # vary the probability of spread
-            _, prop_forest, prop_bare, prop_burn = full_simulation(current_state,vary) # no need to save prop. dead
+            # underscore used because there is no need to save proportion dead for wildfire
+            _, prop_bare, prop_forest, prop_burn = full_simulation(current_state,vary)
         else:
             # vary initial conditions (proportion of forest burned) using vary
             current_state = initialise_simulation(nx,ny,prob_start,vary)
             # hold the probability of spread constant
-            _, prop_forest, prop_bare, prop_burn = full_simulation(current_state,fixed_prob) # no need to save prop. dead
+            # underscore used because there is no need to save proportion dead for wildfire
+            _, prop_bare, prop_forest, prop_burn = full_simulation(current_state,fixed_prob)
                     
         forested_dict[f'{vary:.1f}'] = prop_forest # key indicates probability of spread
         bare_dict[f'{vary:.1f}'] = prop_bare # key indicates probability of spread
@@ -365,9 +463,6 @@ def question_two(nx,ny,fixed_prob=0.0,prob_to_vary='spread'):
     #----------#    
     # PLOTTING #
     #----------#
-    # FIGURE 1: Probability the fire will spread/starts bare vs the number of iterations
-    # for the fire to burn out fully
-
     # calculate important quantities for plotting
     p_spreads = np.array(list(forested_dict.keys()),dtype=float)
     niters = [len(value) for key,value in forested_dict.items()] # assume all are same length
@@ -376,33 +471,49 @@ def question_two(nx,ny,fixed_prob=0.0,prob_to_vary='spread'):
     init_bare = [value[0] for key,value in bare_dict.items()]
 
     if prob_to_vary == 'spread':
+        # FIGURE 1: Probability the fire will spread/starts bare vs the number of iterations
+        # for the fire to burn out fully
         fig1, ax1 = plt.subplots(1,1,figsize=(12,8))  # set up figure and axes
 
-        ax1.plot(p_spreads,niters,'-o',label='Time for Fire to Spread',c='#FFC0BE')
-
-        # label the axes
-        ax1.set_ylabel('Number of Iterations',fontsize=14,fontweight='bold')
-        ax1.set_xlabel('Probability that Fire Spreads',fontsize=14,fontweight='bold')
+        p1 = ax1.plot(p_spreads,niters,'-o',label='Time for Fire to Spread',c='#6F8FAF',lw=3)
         
+        # set up second, dual y axis
         ax2 = ax1.twinx()
-        ax2.plot(p_spreads,prop_burned,'-o',label='Proportion Burned',c="#7F95D1")
+        p2 = ax2.plot(p_spreads,prop_burned,'-o',label='Proportion Burned',c="#CC8899",lw=3)
 
-        ax2.set_ylabel('Proportion of Forest Burned',fontsize=14,fontweight='bold')
-        ax2.set_title('Progress of Wildfire vs Probability that Fire Spreads',fontweight='bold',fontsize=16,loc='left')
+        # labels to pass to formatting function
+        ax1_xlab = 'Probability of Fire Spreading'
+        ax1_ylab = 'Number of Iterations'
+        ax2_ylab = 'Proportion of Forest Burned'
+        ax_title_left = 'Probability of Spread Impact on Wildfire Evolution'
+        ax_title_right = f'p_bare: {fixed_prob}'
+
+        # call format function to make it look pretty
+        format_twin_axes(ax1,ax2,[p1[0],p2[0]],[ax1_ylab,ax2_ylab],ax1_xlab,ax_title_left,ax_title_right)
+        
+        # make everything fit on plot nicely
+        fig1.tight_layout()
         fig1.savefig(f'{OUTPATH}/{run_name}/prob_spread_vs_niters.png')
     else:
         fig1, ax1 = plt.subplots(1,1,figsize=(12,8))  # set up figure and axes
-        ax1.plot(init_bare,niters,'-o',label='Time for Fire to Spread',c='#FFC0BE')
-
-        # label the axes
-        ax1.set_ylabel('Number of Iterations',fontsize=14,fontweight='bold')
-        ax1.set_xlabel('Proportion of Initial Bare Spots',fontsize=14,fontweight='bold')
+        p1 = ax1.plot(init_bare,niters,'-o',label='Time for Fire to Spread',c='#6F8FAF',lw=3)
         
+        # create twin axes to show additional info on same plot
         ax2 = ax1.twinx()
-        ax2.plot(init_bare,prop_burned,'-o',label='Proportion Burned',c="#7F95D1")
+        p2 = ax2.plot(init_bare,prop_burned,'-o',label='Proportion Burned',c="#CC8899",lw=3)
 
-        ax2.set_ylabel('Proportion of Forest Burned',fontsize=14,fontweight='bold')
-        ax2.set_title('Progress of Wildfire vs Probability that Fire Spreads',fontweight='bold',fontsize=16,loc='left')
+        # labels to pass to formatting function
+        ax1_xlab = 'Proportion of Forest Bare at Initialization'
+        ax1_ylab = 'Number of Iterations'
+        ax2_ylab = 'Proportion of Forest Burned'
+        ax_title_left = 'Initial Forest Density Impact on Wildfire Spread'
+        ax_title_right = f'p_spread: {fixed_prob}'
+
+        # call format function to make it look pretty
+        format_twin_axes(ax1,ax2,[p1[0],p2[0]],[ax1_ylab,ax2_ylab],ax1_xlab,ax_title_left,ax_title_right)
+
+        # make everything fit on plot nicely
+        fig1.tight_layout()
         fig1.savefig(f'{OUTPATH}/{run_name}/prob_bare_vs_niters.png')
     
 
@@ -609,14 +720,15 @@ def question_three(nx,ny,fixed_prob=0.0,prob_to_vary='dead'):
     fig3.savefig(f'{OUTPATH}/{run_name}/prob_{prob_to_vary}_disease_heatmap.png')
       
 # run simulations for question 1
-question_one(3,3)
-question_one(3,5)
+#question_one(3,3)
+#question_one(3,5)
 
 # run simulations for question 2
-question_two(500,250)
+question_two(500,250,fixed_prob=0.0,prob_to_vary='spread')
 question_two(500,250,fixed_prob=1.0,prob_to_vary='bare')
 
 # run simulations for question 3
-question_three(500,250,fixed_prob=0,prob_to_vary='vax')
-question_three(500,250,fixed_prob=0,prob_to_vary='dead')
+#question_three(500,250,fixed_prob=0,prob_to_vary='vax')
+#question_three(500,250,fixed_prob=0,prob_to_vary='dead')
+
 
