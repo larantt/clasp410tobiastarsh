@@ -88,9 +88,9 @@ def progress_heatmaps(hmap_arr,p_spreads,run_name,ext,title,ylab='spread',colorm
     contour = ax.imshow(hmap_arr,cmap=colormap,vmax=vmax,vmin=0.0,aspect='auto')
     # create colorbar
     cbar = plt.colorbar(contour,ax=ax,orientation='vertical',pad=0.01)
-    cbar.set_label(label='Proportion of Total Population',weight='bold',labelpad=-20)
+    cbar.set_label(label='Proportion of Total Grid Cells',weight='bold',labelpad=-20)
     # set the colorbar labels from 0 to max, not intermediate ticks
-    cbar.set_ticks((0.0,vmax),labels=('0.0',f'{vmax:.1f}'))
+    cbar.set_ticks((0.0,vmax),labels=('0.0',f'{vmax:.3f}'))
 
     # set y ticks
     ax.set_yticks(np.arange(0,11,1),labels=p_spreads)
@@ -607,10 +607,11 @@ def question_two(nx,ny,fixed_prob=0.0,prob_to_vary='spread'):
     
     cmap_burn = LinearSegmentedColormap.from_list('burning', (
     (0.000, (1.000, 1.000, 1.000)),
-    (0.010, (1.000, 0.922, 0.847)), # trying to help show very small proportion infected
+    (0.0001, (1.000, 0.922, 0.847)), # trying to help show very small proportion infected
     (1.000, (0.996, 0.380, 0.000))))
     progress_heatmaps(hmap_arr[2,:,:].T,p_spreads,run_name,f'{prob_to_vary}_heatmap_burn',
-                      'Proportion Burning',prob_to_vary,cmap_burn,vmax=0.1)
+                      'Proportion Burning',prob_to_vary,cmap_burn,vmax=0.005)
+    #print(hmap_arr[2,:,:])
     
 def question_three(nx,ny,fixed_prob=0.0,prob_to_vary='death'):
     """
