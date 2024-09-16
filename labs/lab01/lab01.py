@@ -23,6 +23,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 from matplotlib.patches import Patch
+from matplotlib.colors import LinearSegmentedColormap
 plt.style.use('seaborn-v0_8-talk')
 
 #############
@@ -52,6 +53,64 @@ FOREST_CMAP = {
 ###############
 ## FUNCTIONS ##
 ###############
+
+def progress_heatmaps(hmap_arr,p_spreads,run_name,ext,title,ylab='spread',colormap='Greys',vmax=1.0):
+    """
+    Helper function to plot and format each panel for the
+    progress heatmaps shown in the report for questions 2 and 3.
+
+    Getting these to format with gridspec was a nightmare, so I
+    decided to just make single panel plots for my own sanity.
+
+    Parameters
+    ----------
+    hmap_arr : np.ndarray
+        multidimensional array containing the simulation progress
+        this is created in the question 2 and 3 functions.
+    p_spreads : arrayLike
+        spread probabilities used to label the axes
+    run_name : str
+        path to which to save each figure panel
+    ext : str
+        string used to save each panel
+    title : str
+        title for plot
+    ylab : str
+        probability being varied for ylabel
+    colormap : str or LinearSegmentedColormap
+        matplotlib colormap to use in figure
+    vmax : float
+        max of plot (used if hard to read)
+    """
+    # FIGURE 3: heatmaps for each timestep and probability of spread
+    fig, ax = plt.subplots(1,1,figsize=(10,6))
+    # imshow data, scaling to fit the figure   
+    contour = ax.imshow(hmap_arr,cmap=colormap,vmax=vmax,vmin=0.0,aspect='auto')
+    # create colorbar
+    cbar = plt.colorbar(contour,ax=ax,orientation='vertical',pad=0.01)
+    cbar.set_label(label='Proportion of Total Population',weight='bold',labelpad=-20)
+    # set the colorbar labels from 0 to max, not intermediate ticks
+    cbar.set_ticks((0.0,vmax),labels=('0.0',f'{vmax:.1f}'))
+
+    # set y ticks
+    ax.set_yticks(np.arange(0,11,1),labels=p_spreads)
+
+    # set axes labels
+    ax.set_ylabel(f'Probability of {ylab.capitalize()}',fontsize=12,fontweight='bold')
+    ax.set_xlabel('Number of Iterations',fontsize=12,fontweight='bold')
+
+    # loop through and make axes bold and pretty
+    for axis in ['top','bottom','left','right']:
+        ax.spines[axis].set_linewidth(2)
+    # make labels bold
+    # increase tick width
+    ax.tick_params(width=2)
+
+    # set title
+    ax.set_title(title,fontsize=16,fontweight='bold',loc='left')
+    # set tight layout
+    fig.tight_layout()
+    fig.savefig(f'{OUTPATH}/{run_name}/{ext}.png')
 
 def format_twin_axes(axis,twin_axis,lines,ylabels,xlabel,left_title=None,right_title=None):
     """
@@ -142,7 +201,7 @@ def format_twin_axes(axis,twin_axis,lines,ylabels,xlabel,left_title=None,right_t
     if left_title:
         axis.set_title(f'{left_title}',fontsize=19,fontweight='bold',loc='left',x=-0.1,y=1.07)
     if right_title:
-        axis.set_title(f'{right_title}',fontsize=14,fontweight='bold',loc='right',y=1.07)
+        axis.set_title(f'{right_title}',fontsize=18,fontweight='bold',loc='right',y=1.07,c="#3b3b3b")
 
     # plot legend
     legend_props = {"size" : 14, "weight" : 'bold'}
@@ -389,7 +448,7 @@ def question_one(nx,ny):
     start = (nx//2,ny//2)
     current_state = initialise_simulation(nx,ny,start)
     
-    visualise_current_state(current_state,'Iteration: 0',run_name,'unit_test_step-0',FOREST_CMAP)
+    visualise_current_state(current_state,'Step: 0',run_name,'unit_test_step-0',FOREST_CMAP)
     # run forest fire simulation. 
     # do not store output (proprotion of cells in each state) as is not needed so use _
     _ = full_simulation(current_state,prob_spread,vis=run_name)
@@ -534,27 +593,26 @@ def question_two(nx,ny,fixed_prob=0.0,prob_to_vary='spread'):
         hmap_arr[1,:len(bare),row] = bare # fill the bare part of the array
         hmap_arr[2,:len(burn),row] = burn # fill the burning part of the array
 
-    # heatmap of forested cells throughout simulation    
-    forested_contour = ax3[0].imshow(hmap_arr[0,:,:].T,cmap='Greens',vmax=1.0,vmin=0.0)
-    plt.colorbar(forested_contour,ax=ax3[0],orientation='vertical',shrink=0.5,aspect=5)
-    ax3[0].set_title('Proportion Forested',loc='left')
-    ax3[0].set_yticks(np.arange(0,11,1),labels=p_spreads) # only need to do once because sharey=True
-
-    # heatmap of bare cells throughout simulation
-    bare_contour = ax3[1].imshow(hmap_arr[1,:,:].T,cmap='Greys',vmax=1.0,vmin=0.0)
-    plt.colorbar(bare_contour,ax=ax3[1],orientation='vertical',shrink=0.5,aspect=5)
-    ax3[1].set_title('Proportion Bare',loc='left')
-
-    # heatmap of bare cells throughout simulation
-    forested_contour = ax3[2].imshow(hmap_arr[2,:,:].T,cmap='Reds',vmax=0.5,vmin=0.0)
-    plt.colorbar(forested_contour,ax=ax3[2],orientation='vertical',shrink=0.5,aspect=5)
-    ax3[2].set_title('Proportion Burning',loc='left')
-
-    fig3.tight_layout()
-
-    fig3.savefig(f'{OUTPATH}/{run_name}/prob_{prob_to_vary}_forest_heatmap.png')
+    cmap_forest = LinearSegmentedColormap.from_list('forested',(
+    (0.000, (1.000, 1.000, 1.000)),
+    (1.000, (0.271, 0.506, 0.380))))
+    progress_heatmaps(hmap_arr[0,:,:].T,p_spreads,run_name,f'{prob_to_vary}_heatmap_forest',
+                      'Proportion Forested',prob_to_vary,cmap_forest)
     
-def question_three(nx,ny,fixed_prob=0.0,prob_to_vary='dead'):
+    cmap_bare = LinearSegmentedColormap.from_list('bare', (
+    (0.000, (1.000, 1.000, 1.000)),
+    (1.000, (0.682, 0.643, 0.400))))
+    progress_heatmaps(hmap_arr[1,:,:].T,p_spreads,run_name,f'{prob_to_vary}_heatmap_bare',
+                      'Proportion Bare',prob_to_vary,cmap_bare)
+    
+    cmap_burn = LinearSegmentedColormap.from_list('burning', (
+    (0.000, (1.000, 1.000, 1.000)),
+    (0.010, (1.000, 0.922, 0.847)), # trying to help show very small proportion infected
+    (1.000, (0.996, 0.380, 0.000))))
+    progress_heatmaps(hmap_arr[2,:,:].T,p_spreads,run_name,f'{prob_to_vary}_heatmap_burn',
+                      'Proportion Burning',prob_to_vary,cmap_burn,vmax=0.1)
+    
+def question_three(nx,ny,fixed_prob=0.0,prob_to_vary='death'):
     """
     Function to solve the simulations for Question 2: how does the spread of wildfire depend on the
     probability of spread of fire and initial forest density?. 
@@ -603,12 +661,12 @@ def question_three(nx,ny,fixed_prob=0.0,prob_to_vary='dead'):
     dead_dict, immune_dict, healthy_dict, spreading_dict = {}, {}, {}, {}
 
     # catch exceptions to the prob to vary function
-    if prob_to_vary not in {'dead','vax'}:
-        raise(ValueError(f'prob_to_vary: {prob_to_vary} is invalid. Choose from "dead" or "vax"'))
+    if prob_to_vary not in {'death','vaccination'}:
+        raise(ValueError(f'prob_to_vary: {prob_to_vary} is invalid. Choose from death or vaccination'))
 
     # iterate over the array of probabilities
     for vary in p_variable:
-        if prob_to_vary == 'dead':
+        if prob_to_vary == 'death':
             # keep initial conditions constant with fixed_prob    
             current_state = initialise_simulation(nx,ny,prob_start,fixed_prob)
             # vary the mortality rate
@@ -627,6 +685,8 @@ def question_three(nx,ny,fixed_prob=0.0,prob_to_vary='dead'):
     #----------#
     # PLOTTING #
     # ---------#
+    tkw = dict(size=4, width=3) # dictionary formats the tick labels to look good
+
     p_spreads = np.array(list(dead_dict.keys()),dtype=float)
     # find the number of iterations for each simulation at its' probability of spread
     niters = [len(value) for key,value in dead_dict.items()] # assume all are same length
@@ -638,47 +698,82 @@ def question_three(nx,ny,fixed_prob=0.0,prob_to_vary='dead'):
     prop_alive = [value[-1] for key,value in healthy_dict.items()]
     survival_rate = [sum(nums) for nums in zip(prop_immune,prop_alive)]
     
-    fig1, (ax1,ax2) = plt.subplots(2,1,figsize=(12,8))           # set up figure and axes
+    fig1, (ax1,ax2) = plt.subplots(2,1,figsize=(12,10),sharex=True)           # set up figure and axes
     # now plot on line plot
-    ax1.plot(p_spreads,niters,'-o',label='Disease Duration',c="#7F95D1")
-    ax1.legend()
+    ax1.plot(p_spreads,niters,'-o',label='Disease Duration',c="#FFB000",lw=3)
+    legend_props = {"size" : 14, "weight" : 'bold'}
+    ax1.legend(frameon=False, labelcolor='#3b3b3b',
+                loc='upper left',prop=legend_props,bbox_to_anchor=(-0.09,1.147),ncols=2)
 
-    ax2.plot(p_spreads,prop_alive,'-o',label='Never Caught Virus (No Immunity)')
-    ax2.plot(p_spreads,prop_immune,'-o',label='Immune')
-    ax2.plot(p_spreads,prop_dead,'-o',label='Dead')
-    ax2.plot(p_spreads,survival_rate,'-o',label='Total Surviving')
-    ax2.legend()
+    ax2.plot(p_spreads,prop_alive,'-o',label='No Immunity',lw=3,c="#DC267F")
+    ax2.plot(p_spreads,prop_immune,'-o',label='Immune',lw=3,c="#785EF0")
+    ax2.plot(p_spreads,prop_dead,'-o',label='Dead',lw=3,c="#648FFF")
+    ax2.plot(p_spreads,survival_rate,'-o',label='Surviving',lw=3,c="#FE6100")
+    ax2.legend(frameon=False, labelcolor='#3b3b3b',
+                loc='upper left',prop=legend_props,bbox_to_anchor=(-0.09,1.147),ncols=4)
 
 
-    if prob_to_vary == "dead":
+    if prob_to_vary == "death":
         # label the axes
-        ax1.set_ylabel('Number of Iterations')
-        ax1.set_xlabel('Probability of Death (Mortality Rate)')
+        ax1.set_ylabel('Number of Iterations',fontsize=14,fontweight='bold',c='#3b3b3b')
         # label axes 
-        ax2.set_xlabel('Probability of Death (Mortality Rate)')
-        ax2.set_ylabel('Proportion of Population')
+        ax2.set_xlabel('Mortality Rate',fontsize=14,fontweight='bold',c='#3b3b3b')
+        ax2.set_ylabel('Proportion of Population',fontsize=14,fontweight='bold',c='#3b3b3b')
 
-        ax1.set_title('Time for Disease to Stop Spreading vs Mortality Rate')
-        ax2.set_title('Proportion of the Population Surviving vs Mortality Rate')
-    if prob_to_vary == "vax":
+        # set titles
+        ax1.set_title('Impact of Mortality Rate on Disease Duration',
+                      fontsize=20,fontweight='bold',loc='left',x=-0.08,y=1.1)
+        ax1.set_title(f'p_vax = {fixed_prob:.1f}\np_spread = {prob_spread:.1f}',fontsize=18,
+                      fontweight='bold',loc='right',y=1.1,c="#3b3b3b")
+        ax2.set_title('Impact of Mortality Rate on Final Immunity',
+                      fontsize=20,fontweight='bold',loc='left',x=-0.08,y=1.1)
+        
+    if prob_to_vary == "vaccination":
         # label the axes
-        ax1.set_ylabel('Number of Iterations')
-        ax1.set_xlabel('Proportion of Population')
+        ax1.set_ylabel('Number of Iterations',fontsize=14,fontweight='bold',c='#3b3b3b')
         # label axes 
-        ax2.set_xlabel('Vaccination Rate')
-        ax2.set_ylabel('Proportion of Population')
+        ax2.set_xlabel('Vaccination Rate',fontsize=14,fontweight='bold',c='#3b3b3b')
+        ax2.set_ylabel('Proportion of Population',fontsize=14,fontweight='bold',c='#3b3b3b')
 
-        ax1.set_title('Time for Disease to Stop Spreading vs Early Vaccination Rate')
-        ax2.set_title('Final Immunity in Population vs Early Vaccination Rate')
+        # set titles
+        ax1.set_title('Impact of Early Vaccination Rate on Disease Duration',
+                      fontsize=20,fontweight='bold',loc='left',x=-0.08,y=1.1)
+        ax1.set_title(f'p_death = {fixed_prob:.1f}\np_spread = {prob_spread:.1f}',fontsize=18,
+                      fontweight='bold',loc='right',y=1.1,c="#3b3b3b")
+        ax2.set_title('Impact of Early Vaccination Rate on Final Immunity',
+                      fontsize=20,fontweight='bold',loc='left',x=-0.08,y=1.1)
 
-    fig1.tight_layout()
+
+    # loop over axes to complete formatting
+    for ax in [ax1,ax2]:
+        # formatting axes
+        ax.spines["left"].set_position(("axes", -0.01))
+        ax.spines["bottom"].set_position(("axes", -0.005))
+        ax.spines["left"].set_linewidth(3)
+        ax.spines["left"].set_color("#3b3b3b")
+
+        ax.yaxis.label.set_color("#3b3b3b")
+        ax.tick_params(axis='y', colors="#3b3b3b", **tkw)
+
+        ax.tick_params(axis='x', colors="#3b3b3b", **tkw)
+        ax.spines['bottom'].set_color("#3b3b3b")
+        ax.xaxis.label.set_color("#3b3b3b")
+        ax.spines["bottom"].set_linewidth(3)
+
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+        # force axes to start at 0
+        ax.set_xlim(left=0)
+        ax.set_ylim(bottom=0)
+
+    #ax1.spines["bottom"].set_visible(False)
+
+    fig1.tight_layout(pad=3.0)
     # make directory to save plots if it doesn't already exist
     Path(f'{OUTPATH}/{run_name}').mkdir(parents=True, exist_ok=True)
     fig1.savefig(f'{OUTPATH}/{run_name}/figure1_{prob_to_vary}.png')   
 
-    # FIGURE 3: heatmaps for each timestep and probability of spread
-    # NOTE: need to improve formatting and 
-    fig3, ax3 = plt.subplots(4,1,figsize=(10,14),sharey=True)
     # construct heatmap shapes
     hmap_length = np.max(niters)  # longest number of iterations wide
     hmap_width = len(p_spreads) # one row for each probability of spread
@@ -693,42 +788,48 @@ def question_three(nx,ny,fixed_prob=0.0,prob_to_vary='dead'):
         hmap_arr[1,:len(immune),row] = immune # fill the immune part of the array
         hmap_arr[2,:len(healthy),row] = healthy # fill the healthy part of the array
         hmap_arr[3,:len(sick),row] = sick # fill the sick part of the array
+    
 
-    # heatmap of forested cells throughout simulation    
-    dead_contour = ax3[0].imshow(hmap_arr[0,:,:].T,cmap='Greys',vmax=1.0,vmin=0.0)
-    plt.colorbar(dead_contour,ax=ax3[0],orientation='vertical',shrink=0.5,aspect=5)
-    ax3[0].set_title('Proportion Dead',loc='left')
-    ax3[0].set_yticks(np.arange(0,11,1),labels=p_spreads) # only need to do once because sharey=True
-
-    # heatmap of bare cells throughout simulation
-    immune_contour = ax3[1].imshow(hmap_arr[1,:,:].T,cmap='Blues',vmax=1.0,vmin=0.0)
-    plt.colorbar(immune_contour,ax=ax3[1],orientation='vertical',shrink=0.5,aspect=5)
-    ax3[1].set_title('Proportion Immune',loc='left')
-
-    # heatmap of bare cells throughout simulation
-    healthy_contour = ax3[2].imshow(hmap_arr[2,:,:].T,cmap='Greens',vmax=1.0,vmin=0.0)
-    plt.colorbar(healthy_contour,ax=ax3[2],orientation='vertical',shrink=0.5,aspect=5)
-    ax3[2].set_title('Proportion Healthy',loc='left')
-
-    # heatmap of bare cells throughout simulation
-    sick_contour = ax3[3].imshow(hmap_arr[3,:,:].T,cmap='Reds',vmax=0.5,vmin=0.0)
-    plt.colorbar(sick_contour,ax=ax3[3],orientation='vertical',shrink=0.5,aspect=5)
-    ax3[3].set_title('Proportion Sick',loc='left')
-
-    fig3.tight_layout()
-
-    fig3.savefig(f'{OUTPATH}/{run_name}/prob_{prob_to_vary}_disease_heatmap.png')
+    # FIGURE 3: heatmaps for each timestep and probability of spread
+    # generate colormap corresponding to color used in line plot
+    # Edit this gradient at https://eltos.github.io/gradient/#FFFFFF-648FFF (cool site!)
+    cmap_dead = LinearSegmentedColormap.from_list('dead',(
+    (0.000, (1.000, 1.000, 1.000)),
+    (1.000, (0.392, 0.561, 1.000))))
+    progress_heatmaps(hmap_arr[0,:,:].T,p_spreads,run_name,f'{prob_to_vary}_heatmap_dead',
+                      'Proportion Dead',prob_to_vary,cmap_dead)
+    
+    cmap_immune = LinearSegmentedColormap.from_list('immune', (
+    (0.000, (1.000, 1.000, 1.000)),
+    (1.000, (0.471, 0.369, 0.941))))
+    progress_heatmaps(hmap_arr[1,:,:].T,p_spreads,run_name,f'{prob_to_vary}_heatmap_immune',
+                      'Proportion Immune',prob_to_vary,cmap_immune)
+    
+    cmap_alive = LinearSegmentedColormap.from_list('alive', (
+    (0.000, (1.000, 1.000, 1.000)),
+    (1.000, (0.863, 0.149, 0.498))))
+    progress_heatmaps(hmap_arr[2,:,:].T,p_spreads,run_name,f'{prob_to_vary}_heatmap_healthy',
+                      'Proportion No Immunity',prob_to_vary,cmap_alive)
+    
+    # note that with this colormap, when almost 0% of the grid is infected the virus may still be
+    # spreading but the heatmap will not be able to show this well.
+    cmap_infected = LinearSegmentedColormap.from_list('infected', (
+    (0.000, (1.000, 1.000, 1.000)),
+    (0.010, (1.000, 0.922, 0.847)), # trying to help show very small proportion infected
+    (1.000, (0.996, 0.380, 0.000))))
+    progress_heatmaps(hmap_arr[3,:,:].T,p_spreads,run_name,f'{prob_to_vary}_heatmap_infected',
+                      'Proportion Infected',prob_to_vary,cmap_infected,vmax=0.1)
       
 # run simulations for question 1
-#question_one(3,3)
-#question_one(3,5)
+question_one(3,3)
+question_one(3,5)
 
 # run simulations for question 2
 question_two(500,250,fixed_prob=0.0,prob_to_vary='spread')
 question_two(500,250,fixed_prob=1.0,prob_to_vary='bare')
 
 # run simulations for question 3
-#question_three(500,250,fixed_prob=0,prob_to_vary='vax')
-#question_three(500,250,fixed_prob=0,prob_to_vary='dead')
+question_three(500,250,fixed_prob=0,prob_to_vary='vaccination')
+question_three(500,250,fixed_prob=0,prob_to_vary='death')
 
 
