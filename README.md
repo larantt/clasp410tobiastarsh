@@ -11,10 +11,15 @@ CLASP410TOBIASTARSH
 |   README.md
 |______ examples
 |        |   example01coffee.py
-         |   helloworld.py
+|        |   helloworld.py
+|        |   diffs.py
 |        
 |______ labs
-        |______ lab_01.py
+|       |______ lab01
+|       |         | lab01.py
+|       |
+|       |______ lab02
+                  | lab02.py
                  
 
 ```
