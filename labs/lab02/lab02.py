@@ -12,6 +12,13 @@ from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 plt.style.use('fivethirtyeight')
 
+# Changing font to stix; setting specialized math font properties as directly as possible
+plt.rcParams['mathtext.fontset'] = 'custom'
+plt.rcParams['mathtext.it'] = 'STIXGeneral:italic'
+plt.rcParams['mathtext.bf'] = 'STIXGeneral:italic:bold'
+
+plt.ion()  # comment out when not testing
+
 #########################
 # INTEGRATION FUNCTIONS #
 #########################
@@ -194,31 +201,33 @@ def phase_plot(ax,data_dict):
     # NOTE: we know the keys because the dictionary follows a standard specified format
     # first plot equation N1
     ax.plot(data_dict['times_euler'],data_dict['N1_euler'],
-            lw=3,c='cornflowerblue',label='N1 Euler')
+            lw=3,c='cornflowerblue',label=r'$\mathregular{N_1}$ Euler')
     
     ax.plot(data_dict['times_rk8'],data_dict['N1_rk8'],
-            lw=3,c='cornflowerblue',label='N1 Euler',ls='--')
+            lw=3,c='cornflowerblue',label=r'$\mathregular{N_1}$ RK8',ls='--')
     
     # next plot equation N2
     ax.plot(data_dict['times_euler'],data_dict['N2_euler'],
-            lw=3,c='indianred',label='N1 Euler')
+            lw=3,c='indianred',label=r'$\mathregular{N_2}$ Euler')
     
     ax.plot(data_dict['times_rk8'],data_dict['N2_rk8'],
-            lw=3,c='indianred',label='N1 Euler',ls='--')
+            lw=3,c='indianred',label=r'$\mathregular{N_2}$ RK8',ls='--')
     
     # set legend and format nicely
-    legend_props = {"size" : 14, "weight" : 'bold'}
-    ax.legend(prop=legend_props,loc='upper left',ncols=4,frameon=False)
+    legend_props = {"size" : 12, "weight" : 'bold'}
+    ax.legend(prop=legend_props,loc='upper left')
     
     # set labels and title and format nicely
     labkw = dict(size=14,weight='bold') # dictionary formats the axes labels to look nice
-    ax.set_xlabel(r'Time $\it{(years)}$', **labkw)
+    ax.set_xlabel(r'Time $\mathbf{(years)}$', **labkw)
     ax.set_ylabel('Population/Carrying Capacity', **labkw)
     ax.set_title(f"Lotka-Volterra {data_dict['model']} Model", fontsize=18, fontweight='bold')
 
     # do extra formatting manually because i have a crippling need to be in control of everything at all times :)
-    ax.set_yticklabels(ax.get_yticks(), weight='bold')
-    ax.set_xticklabels(ax.get_xticks(), weight='bold')
+    for xlab,ylab in zip(ax.get_xticklabels(),ax.get_yticklabels()):
+        xlab.set_weight('bold')
+        ylab.set_weight('bold')
+
 
     return ax
 
@@ -369,32 +378,4 @@ def question_one():
 
 
 
-# Solve for the Lotka-Volterra Competition Model
-t,n1,n2 = euler_solve(lv_comp,N1_init=0.3,N2_init=0.6,dT=1)
-t_scipy, n1_scipy, n2_scipy, params = solve_rk8(lv_comp,N1_init=0.3,N2_init=0.6,dT=1)
-
-# plot against each other to see how it looks
-fig1,ax1 = plt.subplots(1,1,figsize=(12,8))
-# first plot N1
-ax1.plot(t,n1,label='N1 euler',c='cornflowerblue')
-ax1.plot(t_scipy,n1_scipy,label='N1 rk8',c='cornflowerblue',ls='--')
-# now plot N2
-ax1.plot(t,n2,label='N2 euler',c='indianred')
-ax1.plot(t_scipy,n2_scipy,label='N2 rk8',c='indianred',ls='--')
-ax1.legend()
-
-# Solve for the Lotka-Volterra Predator-Prey Model
-t,n1,n2 = euler_solve(lv_pred_prey,N1_init=0.3,N2_init=0.6,dT=0.05)
-t_scipy, n1_scipy, n2_scipy, params = solve_rk8(lv_pred_prey,N1_init=0.3,N2_init=0.6,dT=0.05)
-
-solve_eqns('Competition',N1_init=0.3,N2_init=0.6,dT=0.05,a=1)
-
-# plot against each other to see how it looks
-fig2,ax2 = plt.subplots(1,1,figsize=(12,8))
-# first plot N1
-ax2.plot(t,n1,label='N1 euler',c='cornflowerblue')
-ax2.plot(t_scipy,n1_scipy,label='N1 rk8',c='cornflowerblue',ls='--')
-# now plot N2
-ax2.plot(t,n2,label='N2 euler',c='indianred')
-ax2.plot(t_scipy,n2_scipy,label='N2 rk8',c='indianred',ls='--')
-ax2.legend()
+unit_test()
