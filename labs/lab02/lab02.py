@@ -2,11 +2,51 @@
 """
 lab02.py
 
+This lab investigates the stability of a high and low order ODE solver 
+(the Euler Method and the DOP853 RK8 solver from Scipy) when solvinga a
+set of coupled equations (the Lotka-Volterra equations) for competition
+and predator-prey relationships.
 
+This lab produces the following figures:
+q1_competition.png  : plot showing how timestep affects the stability of solvers
+                      for the competition equations
+
+q1_pred_prey.png    : plot showing how timestep affects the stability of solvers
+                      for the predator-prey equations
+
+q2_panel.png        : panel plot showing the impact of varying initial conditions
+                      and coefficients of the competition equations impacts the 
+                      behavior and final population of each species
+
+q2_final_coeffs.png : panel plot showing how varying the coefficients can affect
+                      the final population of a given set of competition equations
+
+q3_panel.png        : panel plot showing the impact of varying initial conditions
+                      and coefficients of the predator-prey equations impacts the 
+                      behavior and final population of each species
+
+q3_phase.png        : phase plot for each set of initial conditions in q3_panel.png
+
+unit_test.png       : unit test which reproduces the figure in the lab manual
+
+
+USER INPUTS
+-----------
+OUTPATH : str
+    absolute filepath to the directory where figures should be saved.
+    this should be edited for the machine you are working on.
+
+To run this file, execute the following command:
+>>> python3 lab02.py
+
+Ensure you have changed the OUTPATH global to your machine
+
+This should produce all figures in the lab report and save them to disk.                 
 """
 ###########
 # IMPORTS #
 ###########
+from pathlib import Path
 import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
@@ -18,6 +58,12 @@ plt.rcParams['mathtext.it'] = 'STIXGeneral:italic'
 plt.rcParams['mathtext.bf'] = 'STIXGeneral:italic:bold'
 
 plt.ion()  # comment out when not testing
+
+# set the few globals to be used in this lab
+# define location to save figures - change on your machine as necessary
+OUTPATH = '/Users/laratobias-tarsh/Documents/fa24/clasp410tobiastarsh/labs/lab02/figures'
+# the best colorblind friendly colormap (https://davidmathlogic.com/colorblind/)
+IBM_cmap = ["#648FFF","#DC267F","#FFB000"] 
 
 #########################
 # INTEGRATION FUNCTIONS #
@@ -103,6 +149,12 @@ def euler_solve(func, N1_init=.5, N2_init=.5, dT=.1, t_final=100.0,**kwargs):
         timestep to terminate the differentiation at
         (equivalent of max iters)
 
+    kwargs
+    ------
+    a, b, c, d : float, defaults=1, 2, 1, 3
+        The value of the Lotka-Volterra coefficients.
+        Can be passed to change initial conditions.
+
     Returns
     -------
     t : arrayLike
@@ -164,10 +216,21 @@ def solve_rk8(func, N1_init=.5, N2_init=.5, dT=10, t_final=100.0, a=1, b=2, c=1,
                         args=[a, b, c, d], method='DOP853', max_step=dT)
     # Perform the integration
     time, N1, N2 = result.t, result.y[0, :], result.y[1, :]
-    # Return values to caller.
-    return time, N1, N2, [a,b,c,d]
+    
+    # save as a dictionary for ease
+    params = {
+        'a'  : a,
+        'b'  : b,
+        'c'  : c,
+        'd'  : d,
+        'dT' : dT,
+        'Initial Conditions' : f'N1 = {N1_init:.2f}, N2 = {N2_init:.2f}'
+    }
 
-def phase_plot(ax,data_dict):
+    # Return values to caller.
+    return time, N1, N2, params
+
+def line_plot(ax,data_dict,lws=3,format=True,euler=True):
     """
     Function creates phase plots to show the output of
     each ODE solver when solving the Lotka-Volterra equations.
@@ -178,58 +241,75 @@ def phase_plot(ax,data_dict):
     function. This is intended to allow for maximum flexibility
     when making figures while reducing additional code.
 
-    Input data should be formatted into a dictionary that follows the
-    convention of storing output in this lab, which is as following
-
-    data_dict = {
-        'model'    : either 'Competition' or 'Predator-Prey',
-        'params'   : [N, a, b, c, d],
-        'times'    : array of times from a solver,
-        'N1_euler' : array for equation N1 from the euler method,
-        'N2_euler' : array for equation N2 from the euler method,
-        'N1_rk8'   : array for equation N1 from the rk8 method,
-        'N2_rk8'   : array for equation N2 from the rk8 method
-    }
-
     Parameters
     ----------
     ax : mpl.Axes
         axis to create the phase plot on
     data_dict : dict
         dictionary containing all the information for the plot
+    lws : int
+        allows linewidth to be changed
+    format : bool
+        Should the axes be formatted with labels and a legend
+        Defaults to True (formatting on)
+    euler : bool
+        Should the Euler equations be plotted
+        Defaults to True (Euler equations plotted)
+
+    Returns
+    -------
+    lines : list(mpl.Line2D)
+        list of lines on the line plot to be used for formatting
     """
     # NOTE: we know the keys because the dictionary follows a standard specified format
-    # first plot equation N1
-    ax.plot(data_dict['times_euler'],data_dict['N1_euler'],
-            lw=3,c='cornflowerblue',label=r'$\mathregular{N_1}$ Euler')
-    
-    ax.plot(data_dict['times_rk8'],data_dict['N1_rk8'],
-            lw=3,c='cornflowerblue',label=r'$\mathregular{N_1}$ RK8',ls='--')
-    
-    # next plot equation N2
-    ax.plot(data_dict['times_euler'],data_dict['N2_euler'],
-            lw=3,c='indianred',label=r'$\mathregular{N_2}$ Euler')
-    
-    ax.plot(data_dict['times_rk8'],data_dict['N2_rk8'],
-            lw=3,c='indianred',label=r'$\mathregular{N_2}$ RK8',ls='--')
-    
-    # set legend and format nicely
-    legend_props = {"size" : 12, "weight" : 'bold'}
-    ax.legend(prop=legend_props,loc='upper left')
-    
-    # set labels and title and format nicely
-    labkw = dict(size=14,weight='bold') # dictionary formats the axes labels to look nice
-    ax.set_xlabel(r'Time $\mathbf{(years)}$', **labkw)
-    ax.set_ylabel('Population/Carrying Capacity', **labkw)
-    ax.set_title(f"Lotka-Volterra {data_dict['model']} Model", fontsize=18, fontweight='bold')
 
-    # do extra formatting manually because i have a crippling need to be in control of everything at all times :)
-    for xlab,ylab in zip(ax.get_xticklabels(),ax.get_yticklabels()):
-        xlab.set_weight('bold')
-        ylab.set_weight('bold')
+    # if we want to plot rk8 and the euler method answers
+    if euler:
+        # plot euler equation for N1
+        n1_e, = ax.plot(data_dict['times_euler'],data_dict['N1_euler'],
+                lw=lws,c='cornflowerblue',label=r'$\mathregular{N_1}$ Euler')
+        # plot euler equation for N2
+        n2_e, = ax.plot(data_dict['times_euler'],data_dict['N2_euler'],
+                lw=lws,c='indianred',label=r'$\mathregular{N_2}$ Euler')
+        # plot rk8 equation for n1
+        n1_r, = ax.plot(data_dict['times_rk8'],data_dict['N1_rk8'],
+            lw=lws,c='cornflowerblue',label=r'$\mathregular{N_1}$ RK8',ls='--')
+        # plot rk8 equation for n2
+        n2_r, = ax.plot(data_dict['times_rk8'],data_dict['N2_rk8'],
+            lw=lws,c='indianred',label=r'$\mathregular{N_2}$ RK8',ls='--')
+        # return the lines for legend formatting
+        lines = [n1_e,n2_e,n1_r,n2_r]
+    
+    # if we dont want the euler method answers, just rk8
+    else:
+        # plot n1
+        n1_r, = ax.plot(data_dict['times_rk8'],data_dict['N1_rk8'],
+            lw=lws,c='cornflowerblue',label=r'$\mathregular{N_1}$ RK8')
+        # plot n2
+        n2_r, = ax.plot(data_dict['times_rk8'],data_dict['N2_rk8'],
+            lw=lws,c='indianred',label=r'$\mathregular{N_2}$ RK8')
+        # return lines for legend formatting
+        lines = [n1_r,n2_r]
 
+    # if we want formatting for both axes
+    if format:
+        # set legend and format nicely
+        legend_props = {"size" : 12, "weight" : 'bold'}
+        ax.legend(prop=legend_props,loc='upper left')
+        
+        # set labels and title and format nicely
+        labkw = dict(size=14,weight='bold') # dictionary formats the axes labels to look nice
+        ax.set_xlabel(r'Time $\mathbf{(years)}$', **labkw)
+        ax.set_ylabel('Population/Carrying Capacity', **labkw)
+        ax.set_title(f"Lotka-Volterra {data_dict['model']} Model", fontsize=18, fontweight='bold')
 
-    return ax
+        # do extra formatting manually because i have a crippling need to be in control of everything at all times :)
+        for xlab,ylab in zip(ax.get_xticklabels(),ax.get_yticklabels()):
+            xlab.set_weight('bold')
+            ylab.set_weight('bold')
+        
+    # return the axes and legend handles
+    return lines
 
 def solve_eqns(model='Competition',**kwargs):
     """
@@ -237,17 +317,6 @@ def solve_eqns(model='Competition',**kwargs):
     and a set of defined parameters which are either taken from the defaults or
     passed in as kwargs. It then formats the data into a dictionary which is 
     used throughout the lab to store data.
-
-    This dictionary takes the following form:
-    data_dict = {
-        'model'    : either 'Competition' or 'Predator-Prey',
-        'params'   : [N, a, b, c, d],
-        'times'    : array of times from a solver,
-        'N1_euler' : array for equation N1 from the euler method,
-        'N2_euler' : array for equation N2 from the euler method,
-        'N1_rk8'   : array for equation N1 from the rk8 method,
-        'N2_rk8'   : array for equation N2 from the rk8 method
-    }
 
     Parameters
     ----------
@@ -289,7 +358,6 @@ def solve_eqns(model='Competition',**kwargs):
     # get the longest time array (note that the scipy solver might be longer/shorter bc of adaptive timestepping)
     # NOTE: this feels like unsafe coding, should look for a better way later
     #times = t_rk8 if max(len(t_rk8),len(t_euler)) == len(t_rk8) else t_euler
-    
     # now format into dictionary
     data_dict = {
         'model'      : model,
@@ -304,24 +372,12 @@ def solve_eqns(model='Competition',**kwargs):
 
     return data_dict
 
-
 def unit_test():
     """
     This function performs a unit test for both sets of
     Lotka-Volterra equations, which matches the figure provided
     in the lab. It is also helpful for demonstrating the dictionary
     format in which data for this lab is stored.
-
-    The data dictionary takes the following form:
-    data_dict = {
-        'model'    : either 'Competition' or 'Predator-Prey',
-        'params'   : [N, a, b, c, d],
-        'times'    : array of times from a solver,
-        'N1_euler' : array for equation N1 from the euler method,
-        'N2_euler' : array for equation N2 from the euler method,
-        'N1_rk8'   : array for equation N1 from the rk8 method,
-        'N2_rk8'   : array for equation N2 from the rk8 method
-    }
 
     All parameters in the functions are explicitly passed for the
     purpose of demonstration, though note that calling each of the
@@ -341,10 +397,8 @@ def unit_test():
 
     Returns
     -------
-    data_dict : dict
-        dictionary containing all data for the experiment in
-        the standard format for the lab. This is intended for the
-        user to explore.
+    None
+
     """
     # define the kwargs for the equation set
     inputs = {
@@ -362,20 +416,356 @@ def unit_test():
 
     # now plot the data for confirmation of performance
     fig, ax = plt.subplots(1,2,figsize=(15,8))
-    phase_plot(ax[0],competition_data)
-    phase_plot(ax[1],pred_pray_data)
+    line_plot(ax[0],competition_data)
+    line_plot(ax[1],pred_pray_data)
+
+    # add parameters as text on figure
+    coeff_text = [f"{key}={val}" for key,val in competition_data["params"].items()][0:-1] # skip dT
+    # annotate figure with the coefficients neatly
+    ax[0].text(100,-0.14,f'Coefficients: {" ".join(str(i) for i in coeff_text)}',
+               fontsize=10,fontweight='bold')
     
-    # perform additional figure formatting (add params)
-    return competition_data,pred_pray_data
+    # make directory to save plots if it doesn't already exist
+    Path(f'{OUTPATH}').mkdir(parents=True, exist_ok=True)
+    # save the figure
+    fig.savefig(f'{OUTPATH}/unit_test.png',dpi=300)
 
 def question_one():
     """
     Contains all necessary code to answer question 1 in the lab.
 
-    
+    First, executes the unit test, then creates two four panel
+    plots. The first explores the result of varying the timestep
+    on the competition equations, the second explores the result
+    of varying the timestep on the predator-prey equations.
+
+    Each plot is a 3x2 panel showing select example initial conditions.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
     """
-    pass
+    # first execute the unit test to verify code is working
+    unit_test()       # dont store output bc who cares
 
+    # now, varying the timestep to generate ensembles
+    inputs = {
+        'a'       : 1,
+        'b'       : 2,
+        'c'       : 1,
+        'd'       : 3,
+        'N1_init' : 0.3,
+        'N2_init' : 0.6,
+        't_final' : 100
+    }
 
+    # plot the full ensemble of times
+    dts_comp = np.array([0.01,0.1,0.25,1.5,1.75,1.95])
+    dts_pred = np.array([0.01,0.02,0.03,0.05,0.07,0.09])
+    competition_data = np.array([solve_eqns('Competition',dT=time,**inputs) for time in dts_comp])
+    pred_prey_data = np.array([solve_eqns('Predator-Prey',dT=time,**inputs) for time in dts_pred])
 
-unit_test()
+    # now plot select timesteps individually for comparison
+    # first do small dTs
+    fig1, ax1 = plt.subplots(2,3,figsize=(18*2,12))
+
+    for ax,data in zip(ax1.flatten(), competition_data):
+        line_plot(ax,data)
+        ax.set_title(f'Timestep: {data["params"]["dT"]} Years',fontweight='bold',fontsize=14)
+
+    # add parameters as text on figure
+    coeff_text = [f"{key}={val}" for key,val in competition_data[0]["params"].items()][0:-2] # skip dT, initial conditions
+    # annotate figure with the coefficients neatly
+    ax1[1,1].text(18,-0.25,f'Coefficients: {" ".join(str(i) for i in coeff_text)}',
+               fontsize=10,fontweight='bold')
+    # set overall title
+    fig1.suptitle('Impact of Timestep on Numerical Solver for Lotka-Volterra Competition Equations',fontweight='bold',fontsize=18)
+    fig1.tight_layout()
+    # make directory to save plots if it doesn't already exist
+    Path(f'{OUTPATH}').mkdir(parents=True, exist_ok=True)
+    # save the figure
+    fig1.savefig(f'{OUTPATH}/q1_competition.png',dpi=300)
+
+    # now do the predator-prey equations
+    fig2, ax2 = plt.subplots(2,3,figsize=(18*2,12))
+
+    for ax,data in zip(ax2.flatten(), pred_prey_data):
+        line_plot(ax,data)
+        ax.set_title(f'Timestep: {data["params"]["dT"]} Years',fontweight='bold',fontsize=14)
+
+    # add parameters as text on figure
+    coeff_text = [f"{key}={val}" for key,val in pred_prey_data[0]["params"].items()][0:-2] # skip dT, initial conditions
+    # annotate figure with the coefficients neatly
+    ax2[1,1].text(18,-1.0,f'Coefficients: {" ".join(str(i) for i in coeff_text)}',
+               fontsize=10,fontweight='bold')
+    # set overall title
+    fig2.suptitle('Impact of Timestep on Numerical Solver for Lotka-Volterra Predator-Prey Equations',fontweight='bold',fontsize=18)
+    fig2.tight_layout()
+    # make directory to save plots if it doesn't already exist
+    Path(f'{OUTPATH}').mkdir(parents=True, exist_ok=True)
+    # save the figure
+    fig2.savefig(f'{OUTPATH}/q1_pred_prey.png',dpi=300)
+
+def solve_equilibria(a,b,c,d,model='Competition'):
+    """
+    Function solves equilibrium conditions for a given
+    Lotka-Volterra equation, using its parameters.
+
+    The formulas were derived by setting the derivatives to 0
+    and rearranging for N1 and N2, as is demonstrated in the lab
+    for the competition equations.
+
+    Parameters
+    ----------
+    a, b, c, d : float
+        Lotka-Volterra coefficient values
+    model : str
+        string stating which equilibria to solve for
+        Defaults to 'Competition'
+
+    Returns
+    -------
+    (N1, N2) : tuple
+        tuple containing initial conditions that
+        generate equilibrium for a given set of coefficients
+    """
+    if model == 'Competition':
+        # solve competition equilibrium conditions
+        N1 = (c*(a-b))/((c*a)-(b*d))
+        N2 = (a*(c-d))/((c*a)-(b*d))
+    elif model == 'Predator-Prey':
+        # solve predator prey equilibrium conditions
+        N1 = a/b
+        N2 = c/d
+    else:
+        # throw error if inputs are invalid
+        raise(ValueError(f'model={model} of type{type(model)} is incorrect.\nSelect between str(Competition) or str(Predator-Prey)'))
+    return (N1,N2)
+
+def question_two():
+    """
+    Contains the code to answer Question 2 in the lab
+
+    First, creates a 4x3 panel plot of selected examples for different
+    coefficients with different set initial conditions (including one solved equilibrium)
+    in order to demonstrate how varying the coefficients and initial conditions 
+    affect the behavior of the species.
+
+    Next, creates a 2x2 panel plot showing the final results when each coefficient
+    is varied to demonstrate the effect that varying coefficients has on the 
+    final behavior
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+
+    """
+    # part one - varying the initial conditions
+
+    # define 3 sets of coeffs to w defined equilibria
+    ex_a = {'a':2,'b':1,'c':3,'d':2}    # Stable equilibrium
+    ex_b = {'a':2,'b':1,'c':2,'d':1}    # Both equal (stable)
+    ex_c = {'a':1,'b':4,'c':2,'d':3}    # Unstable equilibrium
+
+    # create a 4 part axis
+    fig1, ax1 = plt.subplots(4,3,figsize=(13,10),sharex=True,sharey=True)
+
+    # now loop over the axes rows and the sets of coefficients
+    for col,coef in zip([0,1,2],[ex_a,ex_b,ex_c]):
+         
+        # define variable initial conditions for each scenario
+        inits = [(0.2,0.7),(0.6,0.3),(0.5,0.5),solve_equilibria(**coef)]
+
+        # now loop over the sets of axes and plot
+        for row,init in zip([0,1,2,3],inits):
+            # set formatting to false for more control, store labels
+            data = solve_eqns('Competition',N1_init=init[0],N2_init=init[1],dT=0.5,**coef)
+            lines = line_plot(ax1[row,col],data,lws=2,format=False)
+            ax1[row,col].set_ylim(-0.1,1.1)
+            ax1[row,col].set_title(f'N1={init[0]:.2f}, N2={init[1]:.2f}',fontsize=10,
+                                   fontweight='bold',loc='left',y=0.98,c='#3b3b3b')
+
+        # axes row formatting
+        coeff_text = [f"{key}={val}" for key,val in coef.items()]
+        ax1[0,col].set_title(f'Coefficients: {" ".join(str(i) for i in coeff_text)}',
+                             fontsize=12,fontweight='bold',y=1.08)
+
+    # figure formatting
+    fig1.legend(lines,[line.get_label() for line in lines],fontsize=12,loc='upper center',
+                ncols=4,frameon=False,bbox_to_anchor=(0.5,0.97))
+    fig1.suptitle('Impact of Varying Initial Conditions on Lotka-Volterra Competition Equations',
+                  fontsize=16,fontweight='bold')
+    
+    labkw = dict(size=16,weight='bold') # dictionary formats the axes labels to look nice
+    ax1[3,1].set_xlabel(r'Time $\mathbf{(years)}$', **labkw)       # set common x label
+    ax1[1,0].set_ylabel('Population/Carrying Capacity',y=-0.3, **labkw)   # set common y label
+    
+    # make things fiit nicely
+    fig1.tight_layout(h_pad=-1)
+    
+    # make directory to save plots if it doesn't already exist
+    Path(f'{OUTPATH}').mkdir(parents=True, exist_ok=True)
+    # save the figure
+    fig1.savefig(f'{OUTPATH}/q2_panel.png',dpi=300)
+
+    # PART TWO - varying the coefficients
+
+    # make axes
+    fig2, ax2 = plt.subplots(2,2,figsize=(12,8),sharey=True)
+
+    vary_coeffs = np.arange(0,4.1,0.1)
+    # vary all the coeffs, list comps execute the equations
+    vary_a = [solve_eqns('Competition',N1_init=0.5,N2_init=0.5,a=vary,b=1,c=2,d=1,dT=0.5) for vary in vary_coeffs]
+    vary_b = [solve_eqns('Competition',N1_init=0.5,N2_init=0.5,a=2,b=vary,c=2,d=1,dT=0.5) for vary in vary_coeffs]
+    vary_c = [solve_eqns('Competition',N1_init=0.5,N2_init=0.5,a=2,b=1,c=vary,d=1,dT=0.5) for vary in vary_coeffs]
+    vary_d = [solve_eqns('Competition',N1_init=0.5,N2_init=0.5,a=2,b=1,c=2,d=vary,dT=0.5) for vary in vary_coeffs]
+
+    # now loop over and plot the final populations for each one
+    for ax,variable,lab in zip(ax2.flatten(),[vary_a,vary_b,vary_c,vary_d],['a','b','c','d']):
+        # list comps store the final state of the data
+        n1s = [data['N1_rk8'][-1] for data in variable]
+        n2s = [data['N2_rk8'][-1] for data in variable]
+        
+        # now plot the final state for each initial condition
+        n1, = ax.plot(vary_coeffs,n1s,c='cornflowerblue',label=r'$\mathregular{N_1}$ RK8')
+        n2, = ax.plot(vary_coeffs,n2s,c='indianred',label=r'$\mathregular{N_2}$ RK8')
+        
+        # format the axes
+        ax.set_title(f'Varying {lab}',fontsize=12,fontweight='bold',loc='left')
+        ax.set_xlabel(f'Value of Coefficient {lab}',fontsize=12,fontweight='bold')
+
+    # more axes formatting
+    ax2[0,0].set_ylabel('Population/Carrying Capacity',fontsize=16,fontweight='bold',y=-0.3)
+
+    # set legend
+    fig2.legend([n1,n2],[n1.get_label(),n2.get_label()],loc='upper center',ncols=4,
+                fontsize=12,frameon=False,bbox_to_anchor=(0.5,0.94))
+    fig2.suptitle('Final Population Carrying Capacity Dependent on Coefficient\nBase State: a=2, b=1, c=2, d=1',
+                  fontweight='bold',fontsize=16)
+    
+    # make things fit nicely
+    fig2.tight_layout(h_pad=-1.5)
+    # make directory to save plots if it doesn't already exist
+    Path(f'{OUTPATH}').mkdir(parents=True, exist_ok=True)
+    # save the figure
+    fig2.savefig(f'{OUTPATH}/q2_final_coeffs.png',dpi=300)
+  
+def question_three():
+    """
+    Contains the code to answer Question 2 in the lab
+
+    First, creates a 3x3 panel plot of selected examples for different
+    coefficients with different set initial conditions (including one solved equilibrium)
+    in order to demonstrate how varying the coefficients and initial conditions 
+    affect the behavior of the species.
+
+    Next, creates a 1x3 panel plot showing the phase diagrams for the inital conditions
+    in the figure above
+
+    Also prints the initial and final conditions to the terminal for easier analysis.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+
+    # define 3 sets of coeffs to w defined equilibria
+    ex_a = {'a':1.,'b':1.,'c':1.,'d':1.}    # Stable equilibrium
+    ex_b = {'a':2,'b':0.5,'c':3,'d':0.4}
+    ex_c = {'a':0.5,'b':3.,'c':0.1,'d':2.}    # Both equal (stable)
+
+    fig1, ax1 = plt.subplots(3,3,figsize=(13,10))
+    fig1b, ax1b = plt.subplots(1,3,figsize=(15,4))
+    # now loop over the axes rows and the sets of coefficients
+    for col,coef in zip([0,1,2],[ex_a,ex_b,ex_c]):
+        print(coef)
+         
+        # define variable initial conditions for each scenario
+        inits = [(0.2,0.7),(1,1),(2,5)]
+
+        # now loop over the sets of axes and plot
+        for row,init in zip([0,1,2],inits):
+            # set formatting to false for more control, store labels
+            data = solve_eqns('Predator-Prey',N1_init=init[0],N2_init=init[1],dT=0.05,**coef)
+            lines = line_plot(ax1[row,col],data,lws=2,format=False,euler=False)
+            
+            ax1[row,col].set_title(f'N1={init[0]:.2f}, N2={init[1]:.2f}',fontsize=10,
+                                   fontweight='bold',loc='left',y=0.98,c='#3b3b3b')
+            
+            # print the final population of each species
+            print(f'Initial Conditions: {data["params"]["Initial Conditions"]}')
+            print(f'Final Conditions: N1={data["N1_rk8"][-1]}, N2={data["N2_rk8"][-1]}')
+            
+            # now plot the phase plots on their axes
+            ax1b[col].plot(data["N1_rk8"],data['N2_rk8'],c=IBM_cmap[row],
+                            label=f'N1={init[0]:.2f}, N2={init[1]:.2f}',lw=1)
+        
+            # just to aid visualisation
+            if (coef == ex_a) & (init == (1,1)):
+                ax1b[col].plot(data["N1_rk8"],data['N2_rk8'],'-x',c=IBM_cmap[row],
+                                label=f'N1={init[0]:.2f}, N2={init[1]:.2f}',lw=1)
+
+        # axes row formatting
+        coeff_text = [f"{key}={val}" for key,val in coef.items()]
+        ax1[0,col].set_title(f'Coefficients: {" ".join(str(i) for i in coeff_text)}',
+                             fontsize=12,fontweight='bold',y=1.08)
+        ax1b[col].set_title(f'Coefficients: {" ".join(str(i) for i in coeff_text)}',
+                             fontsize=12,fontweight='bold',y=1.08)
+
+    # figure formatting
+    fig1.legend(lines,[line.get_label() for line in lines],fontsize=12,loc='upper center',
+                ncols=4,frameon=False,bbox_to_anchor=(0.5,0.97))
+    
+    ax1b[1].legend(fontsize=12,loc='upper center',ncols=4,frameon=False,bbox_to_anchor=(0.5,0.95),bbox_transform=fig1b.transFigure)
+    
+    fig1.suptitle('Impact of Varying Initial Conditions on Lotka-Volterra Predator-Prey Equations',
+                  fontsize=16,fontweight='bold')
+    
+    fig1b.suptitle('Phase Diagrams for Lotka-Volterra Predator-Prey Equations',
+                  fontsize=16,fontweight='bold')
+    
+    labkw = dict(size=16,weight='bold') # dictionary formats the axes labels to look nice
+    ax1[2,1].set_xlabel(r'Time $\mathbf{(years)}$', **labkw)       # set common x label
+    ax1[1,0].set_ylabel('Population/Carrying Capacity', **labkw)   # set common y label
+    
+    fig1.tight_layout()
+    fig1b.tight_layout(w_pad=-5)
+    
+    # make directory to save plots if it doesn't already exist
+    Path(f'{OUTPATH}').mkdir(parents=True, exist_ok=True)
+    # save the figure
+    fig1.savefig(f'{OUTPATH}/q3_panel.png',dpi=300)
+    fig1b.savefig(f'{OUTPATH}/q3_phase.png',dpi=300)
+
+def main():
+    """
+    executes the script fully as intended for the lab report
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+    question_one()
+    question_two()
+    question_three()
+
+# run the script
+if __name__ == "__main__":
+    main()
+
