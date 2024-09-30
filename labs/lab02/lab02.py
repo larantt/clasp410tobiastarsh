@@ -752,14 +752,6 @@ def question_three():
 def main():
     """
     executes the script fully as intended for the lab report
-
-    Parameters
-    ----------
-    None
-
-    Returns
-    -------
-    None
     """
     question_one()
     question_two()
