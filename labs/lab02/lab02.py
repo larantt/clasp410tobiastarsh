@@ -39,9 +39,21 @@ OUTPATH : str
 To run this file, execute the following command:
 >>> python3 lab02.py
 
-Ensure you have changed the OUTPATH global to your machine
+Ensure you have changed the OUTPATH global to your machine.
 
-This should produce all figures in the lab report and save them to disk.                 
+This should produce all figures in the lab report and save them to disk.
+
+NOTE: when solving for the second set of coefficients in question 3, a runtime warning occurs:
+  ```  
+    RuntimeWarning: overflow encountered in scalar multiply dN1_dt = a*N[0] - b*N[0]*N[1]
+    RuntimeWarning: overflow encountered in scalar multiply dN2_dt = -1*c*N[1] + d*N[0]*N[1]
+    RuntimeWarning: invalid value encountered in scalar add dN2_dt = -1*c*N[1] + d*N[0]*N[1]
+   ```
+This is due to numerical instability in the Euler method. However, the Euler method solutions are
+NOT plotted, or relevant to reproduce the contents of the lab. As a result, these were not addressed
+as this is expected behavior and alerts the user to the inherent instability of the Euler method as a 
+first order solver. The rk8 solver could be called alone here, but because the data structure to store output
+is created in the solve_eqns function, which uses both methods, it was more convenient not to.
 """
 ###########
 # IMPORTS #
@@ -68,6 +80,46 @@ IBM_cmap = ["#648FFF","#DC267F","#FFB000"]
 #########################
 # INTEGRATION FUNCTIONS #
 #########################
+
+def int_to_roman(number):
+    """
+    Helper function to convert integers to roman numerals. Used for nice figure labelling with
+    multipanel plots.
+
+    Heavily inspired by https://stackoverflow.com/questions/28777219/basic-program-to-convert-integer-to-roman-numerals
+
+    Parameters
+    ----------
+    number : int
+        number to convert to roman numerals
+    
+    Returns
+    -------
+        : str
+        string of the roman numeral for that plot
+    """
+    numerals = [
+        (1000, "M"),
+        ( 900, "CM"),
+        ( 500, "D"),
+        ( 400, "CD"),
+        ( 100, "C"),
+        (  90, "XC"),
+        (  50, "L"),
+        (  40, "XL"),
+        (  10, "X"),
+        (   9, "IX"),
+        (   5, "V"),
+        (   4, "IV"),
+        (   1, "I"),
+    ]
+    result = []
+    for (arabic, roman) in numerals:
+        (factor, number) = divmod(number, arabic)
+        result.append(roman * factor)
+        if number == 0:
+            break
+    return "".join(result)
 
 def lv_comp(t, N, a=1, b=2, c=1, d=3):
     '''
@@ -171,7 +223,7 @@ def euler_solve(func, N1_init=.5, N2_init=.5, dT=.1, t_final=100.0,**kwargs):
     # set the initial state of the Euler solver
     f_N1[0], f_N2[0] = N1_init, N2_init
 
-    # integrate the function (could add a convergence check?)
+    # integrate the function
     for i in range(t.size-1):
         # get the derivatives of the function
         dN1dt, dN2dt = func(i,[f_N1[i],f_N2[i]],**kwargs) # passing kwargs to change initial conditions
@@ -573,7 +625,7 @@ def question_two():
     # define 3 sets of coeffs to w defined equilibria
     ex_a = {'a':2,'b':1,'c':3,'d':2}    # Stable equilibrium
     ex_b = {'a':2,'b':1,'c':2,'d':1}    # Both equal (stable)
-    ex_c = {'a':1,'b':4,'c':2,'d':3}    # Unstable equilibrium
+    ex_c = {'a':2,'b':3,'c':1,'d':4}    # Unstable equilibrium
 
     # create a 4 part axis
     fig1, ax1 = plt.subplots(4,3,figsize=(13,10),sharex=True,sharey=True)
@@ -589,7 +641,9 @@ def question_two():
             # set formatting to false for more control, store labels
             data = solve_eqns('Competition',N1_init=init[0],N2_init=init[1],dT=0.5,**coef)
             lines = line_plot(ax1[row,col],data,lws=2,format=False)
+            # set equal x limit
             ax1[row,col].set_ylim(-0.1,1.1)
+            # label the figures with initial conditions
             ax1[row,col].set_title(f'N1={init[0]:.2f}, N2={init[1]:.2f}',fontsize=10,
                                    fontweight='bold',loc='left',y=0.98,c='#3b3b3b')
 
@@ -598,6 +652,11 @@ def question_two():
         ax1[0,col].set_title(f'Coefficients: {" ".join(str(i) for i in coeff_text)}',
                              fontsize=12,fontweight='bold',y=1.08)
 
+    # loop over axes and add roman numeral for labelling
+    for num,axis in enumerate(ax1.flatten()):
+        # number the figure with roman numerals
+            axis.set_title(int_to_roman(num+1),fontsize=10,
+                                   fontweight='bold',loc='right',y=0.98,c='#3b3b3b')
     # figure formatting
     fig1.legend(lines,[line.get_label() for line in lines],fontsize=12,loc='upper center',
                 ncols=4,frameon=False,bbox_to_anchor=(0.5,0.97))
@@ -670,8 +729,6 @@ def question_three():
     Next, creates a 1x3 panel plot showing the phase diagrams for the inital conditions
     in the figure above
 
-    Also prints the initial and final conditions to the terminal for easier analysis.
-
     Parameters
     ----------
     None
@@ -690,10 +747,9 @@ def question_three():
     fig1b, ax1b = plt.subplots(1,3,figsize=(15,4))
     # now loop over the axes rows and the sets of coefficients
     for col,coef in zip([0,1,2],[ex_a,ex_b,ex_c]):
-        print(coef)
          
         # define variable initial conditions for each scenario
-        inits = [(0.2,0.7),(1,1),(2,5)]
+        inits = [(0.2,0.7),(1,1),(5,2)]
 
         # now loop over the sets of axes and plot
         for row,init in zip([0,1,2],inits):
@@ -704,9 +760,6 @@ def question_three():
             ax1[row,col].set_title(f'N1={init[0]:.2f}, N2={init[1]:.2f}',fontsize=10,
                                    fontweight='bold',loc='left',y=0.98,c='#3b3b3b')
             
-            # print the final population of each species
-            print(f'Initial Conditions: {data["params"]["Initial Conditions"]}')
-            print(f'Final Conditions: N1={data["N1_rk8"][-1]}, N2={data["N2_rk8"][-1]}')
             
             # now plot the phase plots on their axes
             ax1b[col].plot(data["N1_rk8"],data['N2_rk8'],c=IBM_cmap[row],
@@ -724,6 +777,17 @@ def question_three():
         ax1b[col].set_title(f'Coefficients: {" ".join(str(i) for i in coeff_text)}',
                              fontsize=12,fontweight='bold',y=1.08)
 
+    # loop over axes and add roman numeral for labelling
+    for num,axis in enumerate(ax1.flatten()):
+        # number the figure with roman numerals
+            axis.set_title(int_to_roman(num+1),fontsize=10,
+                                   fontweight='bold',loc='right',y=0.98,c='#3b3b3b')
+            
+    # loop over axes and add roman numeral for labelling
+    for num,axis in enumerate(ax1b.flatten()):
+        # number the figure with roman numerals
+            axis.set_title(int_to_roman(num+1),fontsize=10,
+                                   fontweight='bold',loc='right',y=0.98,c='#3b3b3b')
     # figure formatting
     fig1.legend(lines,[line.get_label() for line in lines],fontsize=12,loc='upper center',
                 ncols=4,frameon=False,bbox_to_anchor=(0.5,0.97))
@@ -739,6 +803,9 @@ def question_three():
     labkw = dict(size=16,weight='bold') # dictionary formats the axes labels to look nice
     ax1[2,1].set_xlabel(r'Time $\mathbf{(years)}$', **labkw)       # set common x label
     ax1[1,0].set_ylabel('Population/Carrying Capacity', **labkw)   # set common y label
+
+    ax1b[1].set_xlabel(r'$\mathregular{N_1}$ (prey)', **labkw)       # set common x label
+    ax1b[0].set_ylabel(r'$\mathregular{N_2}$ (predator)', **labkw)   # set common y label
     
     fig1.tight_layout()
     fig1b.tight_layout(w_pad=-5)
