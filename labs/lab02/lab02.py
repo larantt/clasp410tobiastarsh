@@ -526,17 +526,29 @@ def question_one():
     fig1, ax1 = plt.subplots(2,3,figsize=(18*2,12))
 
     for ax,data in zip(ax1.flatten(), competition_data):
-        line_plot(ax,data)
-        ax.set_title(f'Timestep: {data["params"]["dT"]} Years',fontweight='bold',fontsize=14)
+        lines = line_plot(ax,data,lws=2,format=False)
+        ax.set_title(f'Timestep: {data["params"]["dT"]} Years',fontweight='bold',fontsize=12)
 
     # add parameters as text on figure
     coeff_text = [f"{key}={val}" for key,val in competition_data[0]["params"].items()][0:-2] # skip dT, initial conditions
     # annotate figure with the coefficients neatly
     ax1[1,1].text(18,-0.25,f'Coefficients: {" ".join(str(i) for i in coeff_text)}',
                fontsize=10,fontweight='bold')
+    
+    # figure formatting
+    fig1.legend(lines,[line.get_label() for line in lines],fontsize=12,loc='upper center',
+                ncols=4,frameon=False,bbox_to_anchor=(0.5,0.972))
+    
     # set overall title
     fig1.suptitle('Impact of Timestep on Numerical Solver for Lotka-Volterra Competition Equations',fontweight='bold',fontsize=18)
-    fig1.tight_layout()
+
+    labkw = dict(size=16,weight='bold') # dictionary formats the axes labels to look nice
+    ax1[1,1].set_xlabel(r'Time $\mathbf{(years)}$', **labkw)       # set common x label
+    ax1[0,0].set_ylabel('Population/Carrying Capacity',y=-0.3, **labkw)   # set common y label
+    
+    # make things fiit nicely
+    fig1.tight_layout(h_pad=-2)
+
     # make directory to save plots if it doesn't already exist
     Path(f'{OUTPATH}').mkdir(parents=True, exist_ok=True)
     # save the figure
@@ -546,17 +558,28 @@ def question_one():
     fig2, ax2 = plt.subplots(2,3,figsize=(18*2,12))
 
     for ax,data in zip(ax2.flatten(), pred_prey_data):
-        line_plot(ax,data)
-        ax.set_title(f'Timestep: {data["params"]["dT"]} Years',fontweight='bold',fontsize=14)
+        lines = line_plot(ax,data,lws=2,format=False)
+        ax.set_title(f'Timestep: {data["params"]["dT"]} Years',fontweight='bold',fontsize=12)
 
     # add parameters as text on figure
     coeff_text = [f"{key}={val}" for key,val in pred_prey_data[0]["params"].items()][0:-2] # skip dT, initial conditions
     # annotate figure with the coefficients neatly
     ax2[1,1].text(18,-1.0,f'Coefficients: {" ".join(str(i) for i in coeff_text)}',
                fontsize=10,fontweight='bold')
+    
+    # figure formatting
+    fig2.legend(lines,[line.get_label() for line in lines],fontsize=12,loc='upper center',
+                ncols=4,frameon=False,bbox_to_anchor=(0.5,0.972))
+    
     # set overall title
     fig2.suptitle('Impact of Timestep on Numerical Solver for Lotka-Volterra Predator-Prey Equations',fontweight='bold',fontsize=18)
-    fig2.tight_layout()
+
+    # set axes labels
+    labkw = dict(size=16,weight='bold') # dictionary formats the axes labels to look nice
+    ax2[1,1].set_xlabel(r'Time $\mathbf{(years)}$', **labkw)       # set common x label
+    ax2[0,0].set_ylabel('Population/Carrying Capacity',y=-0.3, **labkw)   # set common y label
+
+    fig2.tight_layout(h_pad=-2)
     # make directory to save plots if it doesn't already exist
     Path(f'{OUTPATH}').mkdir(parents=True, exist_ok=True)
     # save the figure
