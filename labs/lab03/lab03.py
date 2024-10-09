@@ -1,6 +1,34 @@
 #!/usr/bin/env python3
 """
 lab03.py
+
+This lab implements a solver for an N-Layer atmosphere model, using a 
+system of linear equations and numpy's linear algebra capabilities. We
+use this model to explore the the planetary atmosphere of Venus and the Earth,
+and to explore a nuclear winter scenario for Earth.
+
+This lab produces the following figures:
+q2_verification.png : a verification plot comparing a calculated vertical profile with
+                      an atmospheric profile derived from the Martin Singh online solver.
+q3_emissivity.png   : a plot of surface temperature with varying emissivity for Earth.
+q3_layers.png       : a plot of surface temperature with varying number of atmospheric layers for Earth.
+q4_venus.png        : a plot of the number of atmospheric layers needed to achieve Venus' surface temperature.
+q5_nuclear.png      : vertical profile of Earth's atmosphere in a nuclear winter scenario.
+
+USER INPUTS
+-----------
+OUTPATH : str
+    absolute filepath to the directory where figures should be saved.
+    this should be edited for the machine you are working on.
+
+To run this file, execute the following command:
+>>> python3 lab03.py
+
+Ensure you have changed the OUTPATH global to your machine.
+
+This should produce all figures in the lab report and save them to disk. It will also run
+a short suite of unit tests to confirm the solver behaves as expected.
+
 """
 import os
 from pathlib import Path
@@ -58,24 +86,30 @@ def n_layer_atmos(N, epsilon, S0=1350, albedo=0.33, debug=False, nuke=False):
     Parameters
     ----------
     N : int
-        Set the number of layers.
+        number of atmospheric layers
     epsilon : float, default=1.0
-        Set the emissivity of the atmospheric layers.
+        emissivity of the atmospheric layers
     albedo : float, default=0.33
-        Set the planetary albedo from 0 to 1.
+        planetary albedo (ranges from 0-1)
     S0 : float, default=1350
         Set the incoming solar shortwave flux in Watts/m^2.
-    debug : boolean, default=False/0
-        Turn on debug output. Integer determines level of 
+    debug : bool, default=False/0
+        turn on debug output. Integer determines level of 
         verbosity of the output. 1 will only return the coefficient
         matrix for use in unit tests, 2 will print the A matrix,
         greater than 2 will print all information.
+    nuke : bool, default=False
+        nuclear winter scenario.
 
     Returns
     -------
-    temps : Numpy array of size N+1
-        Array of temperatures from the Earth's surface (element 0) through
-        each of the N atmospheric layers, from lowest to highest.
+    temps : np.ndarray
+        array of temperatures from the Earth's surface (element 0) through
+        each of the N atmospheric layers, from lowest to highest
+    params : dict
+        parameters used in the model, used for plotting
+    A : np.ndarray
+        coefficients matrix, used for debugging
     '''
 
     # Create matrices:
@@ -84,7 +118,7 @@ def n_layer_atmos(N, epsilon, S0=1350, albedo=0.33, debug=False, nuke=False):
     b = np.zeros(N+1)
     # if nuclear winter, set the top of the b-matrix to S flux, atmosphere opaque to SW
     if nuke:
-        b[-1] = -S0/4 * (1-albedo)
+        b[-1] = -S0/4
     # otherwise, atmosphere is transparent to shortwave and is absorbed at ground
     else:
         b[0] = -S0/4 * (1-albedo)
@@ -144,7 +178,9 @@ class TestNlayeratmos(unittest.TestCase):
     Class contains unit tests for the verification step in the 
     lab methodology. While this would normally be run as its 
     own unit, this is run in the question 2 function below for ease 
-    of use and grading
+    of use and grading.
+
+    Adapted from https://www.geeksforgeeks.org/unit-testing-python-unittest/
     """
     def test_2layer_halfepsilon(self):
         """
@@ -205,7 +241,6 @@ class TestNlayeratmos(unittest.TestCase):
         np.testing.assert_array_equal(np.round(n_layer_atmos(1, 1)[0],1), obs_temps)
         np.testing.assert_array_equal(n_layer_atmos(1, 1)[-1], obs_A)
 
-
 # function for atmospheric profile
 def atmospheric_profile(temps_array,params,ax=None,title='Vertical Atmospheric Profile'):
     """
@@ -246,7 +281,7 @@ def atmospheric_profile(temps_array,params,ax=None,title='Vertical Atmospheric P
 
 def emissivity_profile(sfc_temps_array,xaxis_array,params,vary=r'Emissivity $(\epsilon)$',title=None):
     """
-    Function creates a plot of temperature vs atmospheric emissivity
+    Function creates a plot of temperature vs another parameter being varied
 
     Parameters
     ----------
@@ -307,8 +342,9 @@ def question_two():
     """
     
     # then solve for a five layer atmosphere from the website in docstring
-    expr2_obs = np.array([345.7,321.7,307.4,290.7,270.5,244.5])
-    expr2_temps, expr2_params, _ = n_layer_atmos(5,0.5,albedo=0.1)
+    #expr2_obs = np.array([345.7,321.7,307.4,290.7,270.5,244.5])
+    expr2_obs = np.array([290.4,264.0,256.6,248.6,239.6,229.5,217.9])
+    expr2_temps, expr2_params, _ = n_layer_atmos(6,0.231,albedo=0.33)
     print('Testing atmosphere with 5 layers, emissivity of 0.5, albedo of 0.1:')
     print(f'Website Surface Temperature: {expr2_obs[0]}K')
     print(f'Modelled Surface Temperature {np.round(expr2_temps[0],1)}K')
@@ -316,14 +352,12 @@ def question_two():
     # plot results of experiment
     fig1, ax1 = atmospheric_profile(expr2_temps,expr2_params,
                                     'Comparison of Verification and Modelled Atmospheric Profiles')
-    ax1.scatter(expr2_obs,range(len(expr2_obs)),marker='x',c='k',
+    ax1.scatter(expr2_obs,range(len(expr2_obs)),marker='o',edgecolors='k',facecolors=IBM_PINK,
                 zorder=100,label='Verification Temperatures')
     ax1.legend(ncols=1,frameon=False,prop={"size" : 12, "weight" : 'bold'})
     
     # save the figure to disk
     fig1.savefig(f'{OUTPATH}/q2_verification.png',dpi=300)
-
-
 
 # Question 3 - How does the surface temperature of Earth depend on emissivity and the number of layers?.
 def question_three():
@@ -342,7 +376,7 @@ def question_three():
     """
     print('\nQ3: How Does the Surface Temperature of the Earth Depend on emissivity and # of layers')
     # first solve surface temperature vs emissivity for a one layer atmosphere w the same params
-    expr1_epsilon = np.arange(0.05,1.05,0.05)
+    expr1_epsilon = np.arange(0.005,1.005,0.005)
     # don't bother saving the parameter dictionaries or the first atmospheric layer
     expr1_temps = [n_layer_atmos(1,eps)[0][0] for eps in expr1_epsilon]
     # construct our own parameter dictionary without the epsilon as it is being varied
@@ -355,7 +389,7 @@ def question_three():
     sfc_temps_1 = np.array(expr1_temps)
     # get the index (corresponds to number of layers) of closest temp to 288K
     idx_1 = (np.abs(sfc_temps_1 - 288)).argmin()
-    print(f'Emissivity for a Surface Temperature of 288K: {expr1_epsilon[idx_1]})')
+    print(f'Emissivity for a Surface Temperature of 288K: {expr1_epsilon[idx_1]}')
     
     # plot the surface temperature vs emissivity
     fig1, ax1 = emissivity_profile(expr1_temps,expr1_epsilon,expr1_param)
@@ -366,7 +400,7 @@ def question_three():
     fig1.savefig(f'{OUTPATH}/q3_emissivity.png',dpi=300)
 
     # next calculate surface temperature and vary N instead
-    layers = np.arange(0,10,1)
+    layers = np.arange(0,20,1)
     expr2_temps = [n_layer_atmos(N,0.255)[0] for N in layers] # don't bother saving the parameter dictionaries
     # get surface temperatures
     sfc_temps_2 = np.array([temp[0] for temp in expr2_temps])
@@ -385,12 +419,14 @@ def question_three():
         r'$S_{0}$'      : 1350,
         r'$\alpha$'   : 0.33,
     }
-
+    # plot the number of layers vs temperature
+    fig2, ax2 = emissivity_profile(sfc_temps_2,layers,earth_param,vary='Atmospheric Layers')
+    ax2.axhline(288,ls='--',lw=3,c="#A1AEB1",label='288 K (Earth Surface Temperature)')
+    ax2.legend(ncols=1,frameon=False,prop={"size" : 12, "weight" : 'bold'})
     # plot altitude vs temperature
-    fig2, ax2 = atmospheric_profile(expr2_temps[idx_2],earth_param,title='Vertical Atmospheric Profile of Earth')
-
-    fig2.savefig(f'{OUTPATH}/q3_vertical.png',dpi=300)
-
+    fig3, ax3 = atmospheric_profile(expr2_temps[idx_2],earth_param,title='Vertical Atmospheric Profile of Earth')
+    fig2.savefig(f'{OUTPATH}/q3_layers.png',dpi=300)
+    fig3.savefig(f'{OUTPATH}/q3_vertical.png',dpi=300)
 
 # Question 4 - How many atmospheric layers do we expect on the planet Venus?
 def question_four(s0=2600,alpha=0.33,sfc_temp=700,emis=1,planet='Venus'):
@@ -404,6 +440,19 @@ def question_four(s0=2600,alpha=0.33,sfc_temp=700,emis=1,planet='Venus'):
     the number of atmospheric layers.
 
     Function is written such that it could be applied to any planet.
+
+    Parameters
+    ----------
+    s0 : int, default=2600
+        incoming solar flux
+    alpha : float, default=0.33
+        planetary albedo between 0 and 1
+    sfc_temp : int, default=700
+        surface temperature to match
+    emis : int, default=1
+        emissivity of each atmospheric layer
+    planet : str, default=Venus
+        string of planet being solved, used for plotting
     """
     print('\nQ4: How Many Atmospheric Layers on Venus?')
     layers = np.arange(0,50,1)
@@ -431,7 +480,6 @@ def question_four(s0=2600,alpha=0.33,sfc_temp=700,emis=1,planet='Venus'):
     ax1.legend(ncols=1,frameon=False,prop={"size" : 12, "weight" : 'bold'})
     
     fig1.savefig(f'{OUTPATH}/q4_{planet}.png',dpi=300)
-
 
 # Question 5 - nuclear winter
 def question_five():
