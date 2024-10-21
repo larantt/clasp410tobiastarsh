@@ -125,7 +125,7 @@ def heatdiff(xmax, tmax, dx, dt, bconds=default_bounds ,init=default_init, c2=1,
 
     '''
     # perform initial check for stability
-    if dt <= (dx**2)/(2 * (c2**2)):
+    if dt >= (dx**2)/(2 * (c2**2)):
         raise(ValueError(f'Initial conditions dx : {dx}, dt : {dt}, c2 :{c2} are unstable.'))
     
     # Start by calculating size of array: MxN
