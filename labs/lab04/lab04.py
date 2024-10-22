@@ -1,12 +1,41 @@
+#usr/bin/envs python3
+"""
+Lara Tobias-Tarsh (laratt)
+lab04.py - permafrost melting
+
+This lab explores how forward differencing methdos can be used
+to solve the heat equation with time in 1 dimension. We use this
+heat diffusion equation model to answer questions about the seasonal
+dynamics of permafrost and the impact of warming on permafrost in
+the future.
+
+To execute the code in this lab simply run:
+```
+    python3 lab04.py
+```
+
+in your terminal. Because a main() function is used, the code should
+execute immediately and generate all the figures necessary to replicate
+those shown in the lab report. If a directory is not supplied in the
+OUTPATH global variable as user input, the figures in the lab will
+save in a new directory created in your current working directory.
+"""
 import os
+import logging
+import warnings
 from pathlib import Path
 import unittest
 import numpy as np
 import matplotlib.pyplot as plt
 
+
 # Kangerlussuaq average temperature:
 T_KANGER = np.array([-19.7, -21.0, -17., -8.4, 2.3, 8.4,
 10.7, 8.5, 3.1, -6.0, -12.0, -16.9])
+OUTPATH = "/Users/laratobias-tarsh/Documents/fa24/clasp410tobiastarsh/labs/lab04/figures"
+
+# initial configuration for debugging (changed dynamically in heatdiff)
+logging.basicConfig(level=logging.WARNING)
 
 def temp_kanger(t):
     '''
@@ -16,7 +45,7 @@ def temp_kanger(t):
     t_amp = (T_KANGER - T_KANGER.mean()).max()
     return t_amp*np.sin(np.pi/180 * t - np.pi/2) + T_KANGER.mean()
 
-def default_init(U_arr,xgrid):
+def default_init(xgrid):
     """
     Function to default initialise the U array using
     4*x - 4*(x**2).
@@ -27,15 +56,13 @@ def default_init(U_arr,xgrid):
 
     Parameters
     -----------
-    U_arr : np.ndarray
-        2D array for the heat equation
     xgrid : np.array
         1D array representing the grid spacing in the x direction
 
     """
-    U_arr[:, 0] = 4*xgrid - 4*xgrid**2
+    return 4*xgrid - 4*xgrid**2
 
-def default_bounds(U_arr,**kwargs):
+def default_bounds(u_arr,**kwargs):
     """
     Default function for enforcing boundary conditions
     in a simulation.
@@ -43,15 +70,15 @@ def default_bounds(U_arr,**kwargs):
     In this case, we set the upper and lower boundary
     to 0 in both directions.
 
-    Parameters : U_arr
+    Parameters : u_arr
         U array used in the heat equation
     """
     # set the top boundary conditions to 0
-    U_arr[0, :] = 0
+    u_arr[0, :] = 0
     # set the bottom boundary conditions to 0
-    U_arr[-1, :] = 0
+    u_arr[-1, :] = 0
 
-def kanger_bounds(U_arr,time_arr):
+def kanger_bounds(u_arr,time_arr):
     """
     Helper function to set the boundary
     conditions for Kangerlussuaq, Greenland.
@@ -66,7 +93,7 @@ def kanger_bounds(U_arr,time_arr):
 
     Parameters
     ----------
-    U_arr : np.ndarray
+    u_arr : np.ndarray
         2D U array in the heat equation solver
     time_arr : np.array
         array of times in days
@@ -75,9 +102,88 @@ def kanger_bounds(U_arr,time_arr):
     # get daily timeseries and interpolate to dt resolution
     temps = temp_kanger(time_arr/86400)
     # now set upper bounds
-    U_arr[0, :] = temps
+    u_arr[0, :] = temps
     # set lower bounds to 5
-    U_arr[-1, :] = 5
+    u_arr[-1, :] = 5
+
+def heatmap(u_arr,t_arr,d_arr,units=None):
+    """
+    Function makes heatmap plot to display the variation of
+    heat with depth and time.
+
+    Parameters
+    ----------
+    u_arr : np.ndarray
+        heat array with time
+    t_arr : np.array
+        array of times for the simulation
+    d_arr : np.array
+        array of depths for the simulation
+    """
+    # create figure and axes
+    fig, ax = plt.subplots(1,1,figsize=(12,8))
+
+    # convert times to desired units
+    if units == 'days':
+        t_arr_scaled = t_arr/86400
+    elif units == 'years':
+        t_arr_scaled = (t_arr/86400)/365
+    elif units == 'seconds':
+        t_arr_scaled = t_arr
+    else:
+        warnings.warn(f"No or invalid time units: {units} specified.\nChoose days, years, or seconds",RuntimeWarning)
+        t_arr_scaled = t_arr
+
+    # determine the largest absolute value of the min and max to the nearest 5
+    scale_range = 5 * ((np.max([np.abs(u_arr.min()),np.abs(u_arr.max())]) + 4) // 5)
+    # make p-color plot
+    cmap = ax.pcolor(t_arr_scaled,d_arr,u_arr,cmap='seismic',vmin=-1*scale_range,vmax=scale_range)
+    # set colorbar
+    cb = fig.colorbar(cmap, ax=ax, label='Temperature ($C$)')
+    # flip axes to decrease depth with height
+    ax.invert_yaxis()
+    ax.set_ylabel('depth (m)')
+    ax.set_xlabel(f'time ({units})')
+
+    return fig, ax
+
+def temp_profile(u_arr,dt,d_arr):
+    """
+    Function creates a seasonal temperature profile with depth for winter and
+    summer.
+
+    Parameters
+    ----------
+    u_arr : np.ndarray
+        2D array containing the heat equation output
+    dt : float
+        timestep used for indexing the final year
+        as for all times in lab, must be in seconds
+    d_arr : np.array
+        1d array representing depth in the simulation
+
+    Returns
+    -------
+    """
+    # 1 year in seconds
+    y2s = 365*5*86400
+    # now set indexing to get final year
+    loc = int(-y2s/dt)
+
+    # get summer and winter values
+    winter = u_arr[:, loc:].min(axis=1)
+    summer = u_arr[:, loc:].max(axis=1)
+
+    # plot temperature profile
+    fig, ax = plt.subplots(1,1,figsize=(12,8))
+    ax.plot(summer,d_arr,c='#BF4146',label='Summer',lw=3)
+    ax.plot(winter,d_arr,c='#80A1C2',label='Winter',lw=3)
+    ax.invert_yaxis()
+    ax.set_xlabel('Temperature (C)')
+    ax.set_ylabel('Depth (m)')
+    ax.legend(loc='upper right',frameon=False,ncols=2)
+
+    return fig, ax
 
 def heatdiff(xmax, tmax, dx, dt, bconds=default_bounds ,init=default_init, c2=1, debug=0):
     '''
@@ -124,9 +230,17 @@ def heatdiff(xmax, tmax, dx, dt, bconds=default_bounds ,init=default_init, c2=1,
         array representing temperature in the simulation
 
     '''
-    # perform initial check for stability
-    if dt >= (dx**2)/(2 * (c2**2)):
-        raise(ValueError(f'Initial conditions dx : {dx}, dt : {dt}, c2 :{c2} are unstable.'))
+    # set logging levels to print debug output
+    if debug > 0:
+        logging.getLogger().setLevel(logging.INFO)
+        logging.info('Debugging turned on (low verbosity)')
+    elif debug > 1:
+        logging.getLogger().setLevel(logging.DEBUG)
+        logging.info('Debugging turned on (high verbosity)')
+
+    # perform initial check for stability (first order in time but 2nd order in space)
+    if dt > (dx**2)/(2 * c2):
+        raise(ValueError(f'Initial conditions dx : {dx}, dt : {dt}, c2 :{c2} are unstable. Reduce dt for stability.'))
     
     # Start by calculating size of array: MxN
     M = int(np.round(xmax / dx + 1))
@@ -134,25 +248,33 @@ def heatdiff(xmax, tmax, dx, dt, bconds=default_bounds ,init=default_init, c2=1,
 
     xgrid, tgrid = np.arange(0, xmax+dx, dx), np.arange(0, tmax+dt, dt)
 
-    if debug:
-        print(f'Our grid goes from 0 to {xmax}m and 0 to {tmax}s')
-        print(f'Our spatial step is {dx} and time step is {dt}')
-        print(f'There are {M} points in space and {N} points in time.')
-        print('Here is our spatial grid:')
-        print(xgrid)
-        print('Here is our time grid:')
-        print(tgrid)
+    # debug statements
+    logging.info('Our grid goes from 0 to %f m and 0 to %f s' % (xmax,tmax))
+    logging.info('Our spatial step is %f and time step is %f' % (dx,dt))
+    logging.info('There are %f points in space and %f points in time.' % (M,N))
+    logging.info('Here is our spatial grid:')
+    logging.info(xgrid)
+    logging.info('Here is our time grid:')
+    logging.info(tgrid)
 
     # Initialize our data array:
-    print(type(N))
-    print(type(M))
     U = np.zeros((M, N))
 
-    # use default initialization function
-    # NOTE: the user could define any function they like here or pass in a lambda
-    init(U,xgrid)
-
-    # enforce boundary conditions
+    # if function to initialize passed in call
+    if callable(init):
+        U[:, 0] = init(xgrid)
+    else:
+        # type check for int or float
+        if not isinstance(init,(int,float)):
+            raise TypeError(f'value for init {init}, type {type(init)} must be callable, int or float')
+        # otherwise, set to init
+        U[:, 0] = init
+    
+    # enforce boundary conditions - note this MUST be a function because in theory
+    # there could be conditions at any four boundaries dependent on any number of 
+    # internal cells/processes/dynamics
+    if not callable(bconds):
+        raise TypeError(f'Value for bconds: {bconds}, type: {bconds} must be callable')
     bconds(U,time_arr=tgrid)
 
     # Set our "r" constant.
@@ -160,20 +282,17 @@ def heatdiff(xmax, tmax, dx, dt, bconds=default_bounds ,init=default_init, c2=1,
 
     # Solve! Forward differnce ahoy.
     # loop in time
-
-    for j,t in zip(range(N-1),tgrid):
-        U[1:-1, j+1] = (1-2*r) * U[1:-1, j] + \
-            r*(U[2:, j] + U[:-2, j])
-        
-        # enforce boundary conditions
+    for j in range(N-1):
+        U[1:-1, j+1] = (1-2*r) * U[1:-1, j] + r*(U[2:, j] + U[:-2, j])
+        # add additional debug statement if asked (using logger avoids slow conditionals)
+        logging.debug('Set U[1:-1, j+1] to:')
+        logging.debug(U[1:-1, j+1])
+        # re-inforce boundary conditions - note that for this lab this does nothing
+        # but in theory if we had Dirichlet or Neumann boundary conditions we would
+        # need to potentially reinforce them
         bconds(U,time_arr=tgrid)
-
-        # add convergence check for the isothermal region
-        # note that time must be > 2 years to start enforcing this
-        if (t > (2 * 3.156e7)) and (t % 3.156e7 == 0):
-            # more than 2 years have passed
-            # compare the temperatures in the isothermal zone
-            continue
+        # space to add convergence check 
+        # (break loop if the average gradient of the isothermal region hardly changes over yr)
 
     # Return grid and result:
     return xgrid, tgrid, U
@@ -186,7 +305,7 @@ class TestNlayeratmos(unittest.TestCase):
 
     Adapted from https://www.geeksforgeeks.org/unit-testing-python-unittest/
     """
-    def test_2layer_halfepsilon(self):
+    def test_heateqn(self):
         """
         Unit test solves for test case given in lab code.
         """
@@ -206,17 +325,49 @@ class TestNlayeratmos(unittest.TestCase):
         sol10p3 = np.array(sol10p3).transpose()
 
         # solve the heat equation for the test case
-        _,_,solver_result = heatdiff(1,0.2,0.2,0.02)
+        x,t,solver_result = heatdiff(1,0.2,0.2,0.02)
+        # plot heatmap for visualisation, could remove this depending on lab requirements
+        heatmap(solver_result,t,x,units='seconds')
         # confirm the coefficients and the temperatures are equal to 1 decimal place
-        np.testing.assert_allclose(solver_result, sol10p3, rtol=1E10)
+        np.testing.assert_allclose(solver_result, sol10p3, rtol=1E6)
 
+
+
+def kanger_test():
+    """
+    Function just reproduces the figures in the lab for Greenland
+    to ensure that the function is working
+    """
+    # depth is 0m to 100m with dx of 1
+    dx    = 0.5             # unit of m
+    depth = 100             # unit of m
+    dt    = 1*86400       # unit of seconds
+    years  = 365*60*86400    # unit of seconds
+    c      = 2.5e-7         # converted value in lab to m^2/s
+    
+    # run with everything, including debugging to check it works
+    x_kang,t_kang,u_kang = heatdiff(xmax=depth,tmax=years,dx=dx,dt=dt,
+                                    bconds=kanger_bounds,c2=c,init=0,debug=1)
+    fig1, ax1 = heatmap(u_kang,t_kang,x_kang,'years')
+    fig2, ax2 = temp_profile(u_kang,dt,x_kang)
+
+    fig1.savefig(f'{OUTPATH}/kang_test_heatmap.png',dpi=300)
+    fig2.savefig(f'{OUTPATH}/kang_test_profile.png',dpi=300)
+    return x_kang, t_kang, u_kang
 
 def main():
     """
     main function executes all code necessary to reproduce
     the figures in the lab report. Will execute all code in order.
     """
-    pass
+    # create path for figures to be saved if not already existing
+    global OUTPATH
+    if not OUTPATH:
+        # will create a figures directory in your current working directory
+        OUTPATH = f'{os.getcwd()}/laratt_lab04_figures'
+
+    Path(OUTPATH).mkdir(parents=True, exist_ok=True)
+    kanger_test()
 
 # run the main function when calling script
 if __name__ == "__main__":
