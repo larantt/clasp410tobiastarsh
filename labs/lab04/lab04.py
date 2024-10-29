@@ -27,23 +27,39 @@ from pathlib import Path
 import unittest
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 
 
 # Kangerlussuaq average temperature:
 T_KANGER = np.array([-19.7, -21.0, -17., -8.4, 2.3, 8.4,
 10.7, 8.5, 3.1, -6.0, -12.0, -16.9])
-OUTPATH = "/Users/laratobias-tarsh/Documents/fa24/clasp410tobiastarsh/labs/lab04/figures"
+OUTPATH = "/Users/laratobias-tarsh/Documents/fa24/clasp410tobiastarsh/labs/lab04/figures_new"
 
 # initial configuration for debugging (changed dynamically in heatdiff)
 logging.basicConfig(level=logging.WARNING)
 
-def temp_kanger(t):
-    '''
-    For an array of times in days, return timeseries of temperature for
-    Kangerlussuaq, Greenland.
-    '''
-    t_amp = (T_KANGER - T_KANGER.mean()).max()
-    return t_amp*np.sin(np.pi/180 * t - np.pi/2) + T_KANGER.mean()
+def bold_axes(ax):
+    """
+    Sets matplotlib axes linewidths to 2, making them
+    bold and more attractive
+
+    Parameters
+    -----------
+    ax : mpl.Axes
+        axes to be bolded
+    """
+    for axis in ['top','bottom','left','right']:
+        ax.spines[axis].set_linewidth(2)
+
+    # increase tick width
+    ax.tick_params(width=2)
+    
+    for label in ax.get_xticklabels():
+        label.set_weight('bold')
+
+    for label in ax.get_yticklabels():
+        label.set_weight('bold')
+
 
 def default_init(xgrid):
     """
@@ -78,7 +94,7 @@ def default_bounds(u_arr,**kwargs):
     # set the bottom boundary conditions to 0
     u_arr[-1, :] = 0
 
-def kanger_bounds(u_arr,time_arr):
+def kanger_bounds(u_arr,time_arr,shift=0.,temp=T_KANGER):
     """
     Helper function to set the boundary
     conditions for Kangerlussuaq, Greenland.
@@ -98,6 +114,14 @@ def kanger_bounds(u_arr,time_arr):
     time_arr : np.array
         array of times in days
     """
+    def temp_kanger(t,temp=temp,shift=shift):
+        '''
+        For an array of times in days, return timeseries of temperature for
+        Kangerlussuaq, Greenland.
+        '''
+        t_amp = (temp - temp.mean()).max()
+        return (t_amp*np.sin(np.pi/180 * t - np.pi/2) + temp.mean()) + shift
+    
     # time is in seconds, 1 day = 86400 seconds so convert time arr to days
     # get daily timeseries and interpolate to dt resolution
     temps = temp_kanger(time_arr/86400)
@@ -105,6 +129,13 @@ def kanger_bounds(u_arr,time_arr):
     u_arr[0, :] = temps
     # set lower bounds to 5
     u_arr[-1, :] = 5
+
+def apply_bounds(func, **kwargs):
+    """
+    Helper function that applies boundary conditions
+    with an uncertain number of arguments where needed.
+    """
+    func(**kwargs)
 
 def heatmap(u_arr,t_arr,d_arr,units=None):
     """
@@ -144,6 +175,7 @@ def heatmap(u_arr,t_arr,d_arr,units=None):
     ax.invert_yaxis()
     ax.set_ylabel('depth (m)')
     ax.set_xlabel(f'time ({units})')
+    bold_axes(ax)
 
     return fig, ax
 
@@ -179,13 +211,16 @@ def temp_profile(u_arr,dt,d_arr):
     ax.plot(summer,d_arr,c='#BF4146',label='Summer',lw=3)
     ax.plot(winter,d_arr,c='#80A1C2',label='Winter',lw=3)
     ax.invert_yaxis()
-    ax.set_xlabel('Temperature (C)')
-    ax.set_ylabel('Depth (m)')
+    ax.set_xlabel(r'Temperature ($^\circ$C)',fontsize=12,fontweight='bold')
+    ax.set_ylabel('Depth (m)',fontsize=12,fontweight='bold')
     ax.legend(loc='upper right',frameon=False,ncols=2)
-
+    ax.set_title('Seasonal Temperature Profiles at Kangerlussaq',loc='left',fontweight='bold',fontsize=14)
+    ax.axvline(0,ls='--',c='darkgrey',label=r'0$^\circ$C')
+    bold_axes(ax)
+    
     return fig, ax
 
-def heatdiff(xmax, tmax, dx, dt, bconds=default_bounds ,init=default_init, c2=1, debug=0):
+def heatdiff(xmax, tmax, dx, dt, bconds=default_bounds, init=default_init, c2=1, debug=0):
     '''
     Function to solve the 1D heat diffusion equation in time.
 
@@ -275,7 +310,9 @@ def heatdiff(xmax, tmax, dx, dt, bconds=default_bounds ,init=default_init, c2=1,
     # internal cells/processes/dynamics
     if not callable(bconds):
         raise TypeError(f'Value for bconds: {bconds}, type: {bconds} must be callable')
-    bconds(U,time_arr=tgrid)
+    
+    apply_bounds(bconds,u_arr=U,time_arr=tgrid)
+    #bconds(U,time_arr=tgrid)
 
     # Set our "r" constant.
     r = c2 * dt / dx**2
@@ -287,10 +324,11 @@ def heatdiff(xmax, tmax, dx, dt, bconds=default_bounds ,init=default_init, c2=1,
         # add additional debug statement if asked (using logger avoids slow conditionals)
         logging.debug('Set U[1:-1, j+1] to:')
         logging.debug(U[1:-1, j+1])
-        # re-inforce boundary conditions - note that for this lab this does nothing
+        # re-enforce boundary conditions - note that for this lab this does nothing
         # but in theory if we had Dirichlet or Neumann boundary conditions we would
         # need to potentially reinforce them
-        bconds(U,time_arr=tgrid)
+        #bconds(U,time_arr=tgrid)
+        apply_bounds(bconds,u_arr=U,time_arr=tgrid)
         # space to add convergence check 
         # (break loop if the average gradient of the isothermal region hardly changes over yr)
 
@@ -298,7 +336,7 @@ def heatdiff(xmax, tmax, dx, dt, bconds=default_bounds ,init=default_init, c2=1,
     return xgrid, tgrid, U
 
 
-class TestNlayeratmos(unittest.TestCase):
+class TestHeatdiff(unittest.TestCase):
     """
     Class contains unit tests for the verification step in the 
     lab methodology.
@@ -332,8 +370,7 @@ class TestNlayeratmos(unittest.TestCase):
         np.testing.assert_allclose(solver_result, sol10p3, rtol=1E6)
 
 
-
-def kanger_test():
+def kanger():
     """
     Function just reproduces the figures in the lab for Greenland
     to ensure that the function is working
@@ -347,13 +384,98 @@ def kanger_test():
     
     # run with everything, including debugging to check it works
     x_kang,t_kang,u_kang = heatdiff(xmax=depth,tmax=years,dx=dx,dt=dt,
-                                    bconds=kanger_bounds,c2=c,init=0,debug=1)
+                                    bconds=kanger_bounds,c2=c,init=0,debug=0)
     fig1, ax1 = heatmap(u_kang,t_kang,x_kang,'years')
     fig2, ax2 = temp_profile(u_kang,dt,x_kang)
 
     fig1.savefig(f'{OUTPATH}/kang_test_heatmap.png',dpi=300)
     fig2.savefig(f'{OUTPATH}/kang_test_profile.png',dpi=300)
     return x_kang, t_kang, u_kang
+
+def plot_all_profiles(us,ds,dt,ax,shift):
+    """
+    Make nice gradient profile for multiple temperatures
+    """
+    # 1 year in seconds
+    y2s = 365*5*86400
+    # now set indexing to get final year
+    loc = int(-y2s/dt)
+    # define nice gradient blue red color pallete (red, blue)
+    colors = [("#d5b3b3","#96b6f2"),
+              ("#bc8484","#5689ea"),
+              ("#a15858","#1b5ede"),
+              ("#733f3f","#13439f"),
+              ("#452525","#0b285f")]
+    # now loop and plot
+    for u_arr, d_arr,cs,s in zip(us,ds,colors[::-1],shift):
+        # get summer and winter values
+        winter = u_arr[:, loc:].min(axis=1)
+        summer = u_arr[:, loc:].max(axis=1)
+        # do plotting
+        ax.plot(summer,d_arr,c=cs[0],label=f'Summer ({s}$^\circ$C warming)',lw=3)
+        ax.plot(winter,d_arr,c=cs[1],label=f'Winter ({s}$^\circ$C warming)',lw=3)
+        ax.set_ylim(0,60)  # change later to actually find the bottom of the coldest profile
+        ax.invert_yaxis()
+        ax.set_xlabel(r'Temperature ($^\circ$C)',fontsize=12,fontweight='bold')
+        ax.set_ylabel('Depth (m)',fontsize=12,fontweight='bold')
+        ax.legend(loc='lower left',frameon=False,ncols=2)
+
+    ax.axvline(0,ls='--',c='lightgrey',label=r'0$^\circ$C')
+    ax.set_title('Seasonal Profiles of Permafrost at Kangerlussaq Under Warming Scenarios',
+                 loc='left',fontsize=14,fontweight='bold')
+    bold_axes(ax)
+
+
+def warm_earth(shift=3.):
+    """
+    Function runs the same solver but adding a uniform shift
+    to the temperatures (in degrees C)
+
+    Parameters
+    ----------
+    temps : callable
+        Function to determine the temperatures, defaults to 
+        kanger_bounds
+    shift : float
+        uniform shift to add to the initial conditions
+    """
+    # define bounds function to allow shift
+    def shift_bounds(u_arr,time_arr):
+       return kanger_bounds(u_arr,time_arr,shift)
+
+    # depth is 0m to 100m with dx of 1
+    dx    = 0.5             # unit of m
+    depth = 100             # unit of m
+    dt    = 1*86400        # unit of seconds
+    years  = 365*60*86400   # unit of seconds
+    c      = 2.5e-7         # converted value in lab to m^2/s
+    
+    # run with everything, including debugging to check it works
+    x_kang,t_kang,u_kang = heatdiff(xmax=depth,tmax=years,dx=dx,dt=dt,
+                                    bconds=shift_bounds,c2=c,init=0,debug=0)
+    return x_kang,t_kang,u_kang
+    
+def shift_temps():
+    """
+    plot
+    """
+    # plot temperature profile
+    fig, ax = plt.subplots(1,1,figsize=(12,8))
+    us,ds = [],[]
+    shifts=[5.,3.,1.,.5,0.]
+    for shift in shifts:
+        x,t,u = warm_earth(shift)
+        us.append(u)
+        ds.append(x)
+        fig1, _ = heatmap(u,t,x,'years')
+        fig2, _ = temp_profile(u,1*86400,x)
+
+        fig1.savefig(f'{OUTPATH}/heatmap_{shift}.png',dpi=300)
+        fig2.savefig(f'{OUTPATH}/temp_profile_{shift}.png',dpi=300)
+
+    plot_all_profiles(us,ds,1*86400,ax,shifts)
+    
+    fig.savefig(f'{OUTPATH}/kang_warmed_heatmap.png',dpi=300)
 
 def main():
     """
@@ -367,7 +489,8 @@ def main():
         OUTPATH = f'{os.getcwd()}/laratt_lab04_figures'
 
     Path(OUTPATH).mkdir(parents=True, exist_ok=True)
-    kanger_test()
+    shift_temps()
+    #kanger()
 
 # run the main function when calling script
 if __name__ == "__main__":
