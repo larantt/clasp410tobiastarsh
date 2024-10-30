@@ -14,26 +14,41 @@ To execute the code in this lab simply run:
     python3 lab04.py
 ```
 
+The simulation should produce 9 figures - a heatmap and vertical
+temperature profile for the baseline climate and the 0.5, 1 and 3
+degree warming scenarios, and an ensemble plot showing all temperature
+profiles on a single map.
+
+Logging is used for the purpose of debugging, and will log to the terminal
+based on the logging level defined in the heatdiff function. Otherwise,
+logger messages will only be written for warnings and errors.
+
 in your terminal. Because a main() function is used, the code should
 execute immediately and generate all the figures necessary to replicate
-those shown in the lab report. If a directory is not supplied in the
+those shown in the lab report. This will also run the unit test written
+to satisfy the requirements in question 1.
+
+If a directory is not supplied in the
 OUTPATH global variable as user input, the figures in the lab will
 save in a new directory created in your current working directory.
 """
+
+### IMPORTS ##
 import os
 import logging
+import datetime
 import warnings
 from pathlib import Path
 import unittest
 import numpy as np
 import matplotlib.pyplot as plt
-import datetime
 
+### DEFINE USEFUL GLOBALS ###
 # Kangerlussuaq average temperature:
 T_KANGER = np.array([-19.7, -21.0, -17., -8.4, 2.3, 8.4,
 10.7, 8.5, 3.1, -6.0, -12.0, -16.9])
 
-# define nice gradient blue red color pallete (red, blue)
+# define nice gradient blue red gradient color pallete (red, blue)
 COLORS = [("#d5b3b3","#96b6f2"),
           ("#bc8484","#5689ea"),
           ("#a15858","#1b5ede"),
@@ -42,11 +57,11 @@ COLORS = [("#d5b3b3","#96b6f2"),
 
 # define nice colorblind friendly plotting colors
 # source: https://davidmathlogic.com/colorblind/#%23648FFF-%23785EF0-%23DC267F-%23FE6100-%23FFB000
-IBM_CMAP = ["#648FFF","#785EF0","#DC267F","#FE6100","#FFB000"]
+IBM_CMAP = ["#648FFF","#785EF0","#DC267F","#FE6100"]
 
 OUTPATH = "/Users/laratobias-tarsh/Documents/fa24/clasp410tobiastarsh/labs/lab04/figures"
 
-# initial configuration for debugging (changed dynamically in heatdiff)
+# initial configuration for debugging (changed dynamically in heatdiff if debugging is turned on)
 logging.basicConfig(level=logging.WARNING)
 
 def bold_axes(ax):
@@ -96,8 +111,14 @@ def default_bounds(u_arr,**kwargs):
     In this case, we set the upper and lower boundary
     to 0 in both directions.
 
-    Parameters : u_arr
+    Parameters
+    -----------
+    u_arr : np.ndarray
         U array used in the heat equation
+    
+    Note that kwargs are passed to make this compatible with the apply_bounds
+    function. I know this is clunky, and could probably be fixed with more
+    time and urgency.
     """
     # set the top boundary conditions to 0
     u_arr[0, :] = 0
@@ -123,11 +144,33 @@ def kanger_bounds(u_arr,time_arr,shift=0.,temp=T_KANGER):
         2D U array in the heat equation solver
     time_arr : np.array
         array of times in days
+    shift : float, defaults to 0.0
+        number of degrees to uniformly shift the climate curve by
+    temp : np.array, defaults to T_KANGER
+        cyclical boundary conditions to set the upper boundary to
     """
     def temp_kanger(t,temp=temp,shift=shift):
         '''
         For an array of times in days, return timeseries of temperature for
-        Kangerlussuaq, Greenland.
+        Kangerlussuaq, Greenland. Local function to overcome the limitations
+        of passing a boundary condition with parameters. 
+        
+        I know this is clunky and there is probably a better way, 
+        but I didn't have time to figure it out.
+
+        Parameters
+        ----------
+        t : np.ndarray
+            array of times to interpolate the monthly climate curve to
+        temp : np.ndarray, defaults to temp in the global function
+            temperatures for the upper boundary condition
+        shift : float, defaults to shift in the global function
+            uniform shift for a warming scenario.
+
+        Returns
+        --------
+            : np.ndarray
+            numpy array interpolated to days for the upper boundary condition.
         '''
         t_amp = (temp - temp.mean()).max()
         return (t_amp*np.sin(np.pi/180 * t - np.pi/2) + temp.mean()) + shift
@@ -144,13 +187,181 @@ def apply_bounds(func, **kwargs):
     """
     Helper function that applies boundary conditions
     with an uncertain number of arguments where needed.
+
+    It literally passes kwargs into a boundary conditions 
+    function. I am sure there is a much better way to do 
+    this, like using a lambda and just having upper and lower
+    bounds in the heatdiff function, but in my head this lab
+    was the 2D heat equation meaning there could be horizontal
+    boundary conditions until I realised it wasnt.
+    
+    so.... 
+    consider this function a nice utility for an easy expansion
+    of our solver to the 2D heat equation....
+
+    Parameters
+    -----------
+    func : function
+        function to pass args into 
+
+    **kwargs
+    --------
+    u_arr, time_arr, shift, temp - or any other necessary kwargs
+    for a user defined boundary conditions function. The possibilites
+    are endless...
     """
     func(**kwargs)
 
-def heatmap(u_arr,t_arr,d_arr,units=None,ax=None,fig=None,title='Heatmap',diverge=True):
+def heatdiff(xmax, tmax, dx, dt, bconds=default_bounds, init=default_init, c2=1, break_conv=False, debug=0):
+    '''
+    Function to solve the 1D heat diffusion equation in time.
+
+    This function first checks the stability of the input parameters (if they are not stable, errors).
+    It then initialises the simulation using user defined or preset functions for initial and
+    boundary conditions, and loops in time for a minimum of 2 years (or until the simulation is complete).
+
+    After 2 years, a covergence check sequence is initiated at the end of each year to see if the
+    temperature in the isothermal zone has been constant. If so, the simulation terminates.
+
+    Parameters:
+    -----------
+    xmax : float
+        maximum depth of the ground in the x direction
+    tmax : float
+        maximum amount of time in seconds
+    dx : float
+        grid spacing in the x direction
+    dt : float
+        time step in seconds
+    bconds : function, Defaults to default_bounds(), sets to 0
+        user defined function to enforce boundary conditions
+        in the simulation.
+    init : function, Defaults to default_init(), sets to 4x - 4x^2
+        user defined function to set initial conditions on
+        the heat grid.
+    c2 : float, defaults to 1
+        coefficient of heat diffusion
+    break_conv : bool, defaults to false
+        should the convergence check cause the simulation to return
+        immediately? If not, will continue to tmax.
+    debug : int, Defaults to 0/False (No output)
+        verbosity of debugging output.
+
+    Returns:
+    --------
+    xgrid : np.ndarray
+        array representing depth
+    tgrid : np.ndarray
+        array representing time
+    U : np.ndarray
+        array representing temperature in the simulation
+    conv : float
+        year at which the simulation converges, used primarily for plotting
+
+    '''
+    # set logging levels to print debug output
+    if debug > 0:
+        logging.getLogger().setLevel(logging.INFO)
+        logging.info('Debugging turned on (low verbosity)')
+    elif debug > 1:
+        logging.getLogger().setLevel(logging.DEBUG)
+        logging.info('Debugging turned on (high verbosity)')
+
+    # perform initial check for stability (first order in time but 2nd order in space)
+    if dt > (dx**2)/(2 * c2):
+        print((dx**2)/(2 * c2))
+        raise(ValueError(f'Initial conditions dx : {dx}, dt : {dt}, c2 :{c2} are unstable. Reduce dt for stability.'))
+    
+    # Start by calculating size of array: MxN
+    M = int(np.round(xmax / dx + 1))
+    N = int(np.round(tmax / dt + 1))
+
+    xgrid, tgrid = np.arange(0, xmax+dx, dx), np.arange(0, tmax+dt, dt)
+
+    # debug statements
+    logging.info('Our grid goes from 0 to %f m and 0 to %f s' % (xmax,tmax))
+    logging.info('Our spatial step is %f and time step is %f' % (dx,dt))
+    logging.info('There are %f points in space and %f points in time.' % (M,N))
+    logging.info('Here is our spatial grid:')
+    logging.info(xgrid)
+    logging.info('Here is our time grid:')
+    logging.info(tgrid)
+
+    # Initialize our data array:
+    U = np.zeros((M, N))
+
+    # if function to initialize passed in call
+    if callable(init):
+        U[:, 0] = init(xgrid)
+    else:
+        # type check for int or float
+        if not isinstance(init,(int,float)):
+            raise TypeError(f'value for init {init}, type {type(init)} must be callable, int or float')
+        # otherwise, set to init
+        U[:, 0] = init
+    
+    # enforce boundary conditions - note this MUST be a function because in theory
+    # there could be conditions at any four boundaries dependent on any number of 
+    # internal cells/processes/dynamics
+    if not callable(bconds):
+        raise TypeError(f'Value for bconds: {bconds}, type: {bconds} must be callable')
+    
+    # apply boundary conditions
+    apply_bounds(bconds,u_arr=U,time_arr=tgrid)
+    # Set our "r" constant.
+    r = c2 * dt / dx**2
+
+    # Solve! Forward differnce ahoy.
+    y2s = 365 * 86400 # for convergence check
+    yearly_j = y2s // dt # for convergence check
+    prev_summer = None # for convergence check
+    conv = 0 # for convergence check
+    # loop in time dimension
+    for j in range(N-1):
+        U[1:-1, j+1] = (1-2*r) * U[1:-1, j] + r*(U[2:, j] + U[:-2, j])
+        # add additional debug statement if asked (using logger avoids slow conditionals)
+        logging.debug('Set U[1:-1, j+1] to:')
+        logging.debug(U[1:-1, j+1])
+        # re-enforce boundary conditions - note that for this lab this does nothing
+        # but in theory if we had Dirichlet or Neumann boundary conditions we would
+        # need to potentially reinforce them
+        apply_bounds(bconds,u_arr=U,time_arr=tgrid)
+
+        # CONVERGENCE CHECK - see if gradient in isothermal zone is constant
+        if (j + 1) % yearly_j == 0:
+            # j is the end of the year, so value at end of year
+            # get summer values (between j and j-365 days) and get isothermal zone
+            summer = U[:, (j - yearly_j):].max(axis=1)
+            # get index of the bottom of the active zone
+            active_idx = np.argwhere(summer <= 0)[0][0]
+            isothermal_zone = summer[active_idx:]   # extract temperatures in the isothermal zone
+            # ensure the values do not change by more than 0.01 degrees C per year
+            if prev_summer is not None:
+                # if more than one year has passed, check if the isothermal zones are basically the same
+                if (np.shape(isothermal_zone) == np.shape(prev_summer)) and \
+                    (np.isclose(isothermal_zone,prev_summer,atol=0.01).all()) and (conv==0):
+                    conv = j//yearly_j # get the year into the simulation is reaches steady state
+                    if break_conv:
+                        # if the simulation should stop at convergence
+                        return xgrid, tgrid, U, conv
+                else:
+                    # otherwise update previous summer
+                    prev_summer = isothermal_zone
+            # clunky way to handle setting isothermal zone after one year, could definitely be improved but works
+            else:
+                prev_summer = isothermal_zone
+            
+    # Return grid and result:
+    # if no temperature change between yrs (within 0.01C)
+    print(f'Convergence reached at {conv} years')
+    return xgrid, tgrid, U, conv
+
+def heatmap(u_arr,t_arr,d_arr,conv,units=None,ax=None,fig=None,title='Heatmap',diverge=True):
     """
     Function makes heatmap plot to display the variation of
-    heat with depth and time.
+    heat with depth and time. Produces a 2D heatmap with either a 
+    diverging or standard colormap, which can be assigned based on the
+    use case. For the permafrost plots, diveringing is ideal.
 
     Parameters
     ----------
@@ -160,6 +371,8 @@ def heatmap(u_arr,t_arr,d_arr,units=None,ax=None,fig=None,title='Heatmap',diverg
         array of times for the simulation
     d_arr : np.array
         array of depths for the simulation
+    conv : float
+        time at which the heatmap converges (used to plot a line where convergence occurs)
     units : str, defaults to seconds
         Units to convert the time into, assumes seconds as a base unit
     ax : mpl.Axes, defaults to None
@@ -206,134 +419,52 @@ def heatmap(u_arr,t_arr,d_arr,units=None,ax=None,fig=None,title='Heatmap',diverg
     cb = fig.colorbar(cmap, ax=ax, label='Temperature ($C$)')
     # flip axes to decrease depth with height
     ax.invert_yaxis()
+    # now set nice labels
     ax.set_ylabel('depth (m)',fontweight='bold',fontsize=12)
     ax.set_xlabel(f'time ({units})',fontweight='bold',fontsize=12)
+    # plot the point at which the simulation converges, based on the convergence check in solver
+    ax.axvline(conv,ls='--',lw=3,c='k',label=f'Convergence at {conv} years')
+    # set legend
+    ax.legend(frameon=False,loc='lower left')
+    # make axes bold and pretty
     bold_axes(ax)
+    # set title
     ax.set_title(title,fontweight='bold',fontsize=16,loc='left')
 
     return fig, ax
 
-def heatdiff(xmax, tmax, dx, dt, bconds=default_bounds, init=default_init, c2=1, debug=0):
-    '''
-    Function to solve the 1D heat diffusion equation in time.
-
-    This function first checks the stability of the input parameters (if they are not stable, errors).
-    It then initialises the simulation using user defined or preset functions for initial and
-    boundary conditions, and loops in time for a minimum of 2 years (or until the simulation is complete).
-
-    After 2 years, a covergence check sequence is initiated at the end of each year to see if the
-    temperature in the isothermal zone has been constant. If so, the simulation terminates.
-
-    Parameters:
-    -----------
-    xmax : float
-        maximum depth of the ground in the x direction
-    tmax : float
-        maximum amount of time in seconds
-    dx : float
-        grid spacing in the x direction
-    dt : float
-        time step in seconds
-    bconds : function
-        user defined function to enforce boundary conditions
-        in the simulation.
-        Defaults to default_bounds(), sets to 0
-    init : function
-        user defined function to set initial conditions on
-        the heat grid.
-        Defaults to default_init(), sets to 4x - 4x^2
-    c2 : float
-        coefficient of heat diffusion
-    debug : int
-        verbosity of debugging output.
-        Defaults to 0/False (No output)
-
-    Returns:
-    --------
-    xgrid : np.ndarray
-        array representing depth
-    tgrid : np.ndarray
-        array representing time
-    U : np.ndarray
-        array representing temperature in the simulation
-
-    '''
-    # set logging levels to print debug output
-    if debug > 0:
-        logging.getLogger().setLevel(logging.INFO)
-        logging.info('Debugging turned on (low verbosity)')
-    elif debug > 1:
-        logging.getLogger().setLevel(logging.DEBUG)
-        logging.info('Debugging turned on (high verbosity)')
-
-    # perform initial check for stability (first order in time but 2nd order in space)
-    if dt > (dx**2)/(2 * c2):
-        raise(ValueError(f'Initial conditions dx : {dx}, dt : {dt}, c2 :{c2} are unstable. Reduce dt for stability.'))
-    
-    # Start by calculating size of array: MxN
-    M = int(np.round(xmax / dx + 1))
-    N = int(np.round(tmax / dt + 1))
-
-    xgrid, tgrid = np.arange(0, xmax+dx, dx), np.arange(0, tmax+dt, dt)
-
-    # debug statements
-    logging.info('Our grid goes from 0 to %f m and 0 to %f s' % (xmax,tmax))
-    logging.info('Our spatial step is %f and time step is %f' % (dx,dt))
-    logging.info('There are %f points in space and %f points in time.' % (M,N))
-    logging.info('Here is our spatial grid:')
-    logging.info(xgrid)
-    logging.info('Here is our time grid:')
-    logging.info(tgrid)
-
-    # Initialize our data array:
-    U = np.zeros((M, N))
-
-    # if function to initialize passed in call
-    if callable(init):
-        U[:, 0] = init(xgrid)
-    else:
-        # type check for int or float
-        if not isinstance(init,(int,float)):
-            raise TypeError(f'value for init {init}, type {type(init)} must be callable, int or float')
-        # otherwise, set to init
-        U[:, 0] = init
-    
-    # enforce boundary conditions - note this MUST be a function because in theory
-    # there could be conditions at any four boundaries dependent on any number of 
-    # internal cells/processes/dynamics
-    if not callable(bconds):
-        raise TypeError(f'Value for bconds: {bconds}, type: {bconds} must be callable')
-    
-    apply_bounds(bconds,u_arr=U,time_arr=tgrid)
-    #bconds(U,time_arr=tgrid)
-
-    # Set our "r" constant.
-    r = c2 * dt / dx**2
-
-    # Solve! Forward differnce ahoy.
-    # loop in time
-    for j in range(N-1):
-        U[1:-1, j+1] = (1-2*r) * U[1:-1, j] + r*(U[2:, j] + U[:-2, j])
-        # add additional debug statement if asked (using logger avoids slow conditionals)
-        logging.debug('Set U[1:-1, j+1] to:')
-        logging.debug(U[1:-1, j+1])
-        # re-enforce boundary conditions - note that for this lab this does nothing
-        # but in theory if we had Dirichlet or Neumann boundary conditions we would
-        # need to potentially reinforce them
-        #bconds(U,time_arr=tgrid)
-        apply_bounds(bconds,u_arr=U,time_arr=tgrid)
-        # space to add convergence check 
-        # (break loop if the average gradient of the isothermal region hardly changes over yr)
-
-    # Return grid and result:
-    return xgrid, tgrid, U
-
-def plot_all_profiles(us,ds,dt,ax,shift,colors,title='Profile of Permafrost'):
+def plot_all_profiles(us,ds,dt,ax,shift,colors,plot_regions=True,title='Profile of Permafrost'):
     """
-    Make nice gradient profile for multiple temperatures
+    Plots the temperature profile in the subsurface column
+
+    This function is pretty flexible, and can take any number of temperature profiles, 
+    though they must be passed in as an iterable because I didn't have time to add handling 
+    for this. This would be a good future improvement.
+
+    Parameters
+    ----------
+    us : iterable, np.ndarray
+        iterable containing any number of 2D heat arrays from the solver
+    ds : iterable, np.ndarray
+        iterable containing any number of 1D depth arrays from the solver
+    dt : iterable, np.ndarray
+        iterable containing any number of 1D time arrays from the solver
+    ax : mpl.axes
+        axes object on which the plot should be created.
+    shift : float, int or string
+        used to label the number of degrees of warming applied to the simulation
+    colors : List(tuple)
+        list of tuples defining a colormap for the summer and winter temperature
+        profiles. See the COLORS global for an example.
+    plot_regions : bool
+        should the active layer and permafrost be shaded on the plot. Only really
+        looks nice for a single profile, but could look nice otherwise.
+    title : string
+        title for the plot
+
     """
     # 1 year in seconds
-    y2s = 365*5*86400
+    y2s = 365*86400
     # now set indexing to get final year
     loc = int(-y2s/dt)
 
@@ -345,22 +476,68 @@ def plot_all_profiles(us,ds,dt,ax,shift,colors,title='Profile of Permafrost'):
         # do plotting
         ax.plot(summer,d_arr,c=cs[0],label=f'Summer ({s}$^\circ$C warming)',lw=3)
         ax.plot(winter,d_arr,c=cs[1],label=f'Winter ({s}$^\circ$C warming)',lw=3)
-        ax.set_ylim(0,60)  # change later to actually find the bottom of the coldest profile
-        ax.invert_yaxis()
+
+        ax.set_ylim(0,60)  # helps with visualisation, could be un-hardcoded to find the bottom of the coldest profile
+        ax.invert_yaxis() # invert y axis to show depth into ground
+        # label axes
         ax.set_xlabel(r'Temperature ($^\circ$C)',fontsize=12,fontweight='bold')
         ax.set_ylabel('Depth (m)',fontsize=12,fontweight='bold')
-        ax.legend(loc='lower left',frameon=False,ncols=2)
 
-    ax.axvline(0,ls='--',c='lightgrey',label=r'0$^\circ$C')
+        # plot the regions
+        if plot_regions:
+            # determine the depth (maximum depth that isothermal zone = 0)
+            # last instance of 0 in the curve before geothermal heating
+            depth_idx = np.argwhere(summer <= 0.)[-1][0]   # note, second index ensures the depth index is retrived
+            bottom = d_arr[depth_idx]
+            # determine the thickness (depth of active layer - depth)
+            # first index below 0 in summer will define active layer
+            active_idx = np.argwhere(summer <= 0)[0][0] # note, second index ensures the depth index is retrived
+            top = d_arr[active_idx]
+
+            # now add to the plot
+            ax.axhspan(top,bottom,facecolor='lavender',alpha=0.5,label=f'Permafrost (thickness = {bottom-top}m)')
+            ax.axhspan(0,top,facecolor='tan',alpha=0.5,label=f'Active Zone (thickness = {top}m)')
+
+
+    # plot the 0 degree isotherm
+    ax.axvline(0,ls='--',c='darkgrey',label=r'0$^\circ$C isotherm')
+    # title the plot
     ax.set_title(title,loc='left',fontsize=14,fontweight='bold')
+    # set a legend
+    ax.legend(loc='lower left',frameon=False,ncols=1)
+    # make axes pretty and bold
     bold_axes(ax)
 
 def plot_depth_thickness(us,ds,dt,ax,shift,colors,title='Thickness and Depth of Permafrost'):
     """
-    Function makes a bar plot of depth and thickness of permafrost
+    Plots the depth and thickness of the permafrost, and the depth of the active
+    layer as a bar graph.
+
+    This function is pretty flexible, and can take any number of temperature profiles, 
+    though they must be passed in as an iterable because I didn't have time to add handling 
+    for this. This would be a good future improvement.
+
+    Parameters
+    ----------
+    us : iterable, np.ndarray
+        iterable containing any number of 2D heat arrays from the solver
+    ds : iterable, np.ndarray
+        iterable containing any number of 1D depth arrays from the solver
+    dt : iterable, np.ndarray
+        iterable containing any number of 1D time arrays from the solver
+    ax : mpl.axes
+        axes object on which the plot should be created.
+    shift : float, int or string
+        used to label the number of degrees of warming applied to the simulation
+    colors : List(tuple)
+        list of tuples defining a colormap for the summer and winter temperature
+        profiles. See the COLORS global for an example.
+    title : string
+        title for the plot
+
     """
     # 1 year in seconds
-    y2s = 365*5*86400
+    y2s = 365*86400
     # now set indexing to get final year
     loc = int(-y2s/dt)
 
@@ -378,50 +555,80 @@ def plot_depth_thickness(us,ds,dt,ax,shift,colors,title='Thickness and Depth of 
         # first index below 0 in summer will define active layer
         active_idx = np.argwhere(summer <= 0)[0][0] # note, second index ensures the depth index is retrived
         thickness = d_arr[depth_idx] - d_arr[active_idx]
+        active = d_arr[active_idx]
        
-        perm_data[f'+{s} warming'] = (depth,thickness)
+        perm_data[f'+{s}$^\circ$C warming'] = (depth,thickness,active)
 
     # now plotting
-    labels = ['depth (m)','thickness (m)']
+    labels = ['Depth (m)','Thickness (m)','Active Layer (m)']
     x = np.arange(len(labels))  # the label locations
-    width = 0.25  # the width of the bars
+    width = 0.2  # the width of the bars
     multiplier = 0
 
-    for lab,measurement in perm_data.items():
-        offset = width * multiplier
-        rects = ax.bar(x + offset, measurement, width, label=lab)
-        ax.bar_label(rects, padding=3)
+    # now loop over the dictionary of depths and thicknesses to plot grouped bars
+    # this was adapted from the ax.bar documentation
+    for i,(lab,measurement) in enumerate(perm_data.items()):
+        offset = width * multiplier  # calculate an offset for each bar so it can be formatted nicely
+        rects = ax.bar(x + offset, measurement, width, label=lab, color=colors[i])
+        ax.bar_label(rects, padding=3, fontweight='bold') # add values as labels above the bars
+        # increment the multiplier for the next spacing
         multiplier += 1
 
-    #ax.set_xticks(i+width,['Depth','Thickness']) 
-    ax.legend(loc='lower left',frameon=False,ncols=2)
-
+    # limit axes for redability 
+    ax.set_ylim(0,65)
+    # change the ticks to categorical labels
+    ax.set_ylabel('Distance (m)',fontsize=12,fontweight='bold')
+    if multiplier > 1:
+        # if there is less than one bar per group, center label
+        ax.set_xticks(x + width, labels)
+    else:
+        ax.set_xticks(x, labels)
+    
+    # set legend and title, bold axes
+    ax.legend(loc='upper left', ncols=2,frameon=False)
     ax.set_title(title,loc='left',fontsize=14,fontweight='bold')
     bold_axes(ax)
 
-
-
-def permafrost_solve(dx,depth,dt,years,c,shift=3.):
+def permafrost_solve(dx,depth,dt,years,c,shift=0.):
     """
     Function runs the same solver but adding a uniform shift
-    to the temperatures (in degrees C)
+    to the temperatures (in degrees C).
 
     Parameters
     ----------
+    dx : float
+        vertical grid spacing
+    depth : float
+        maximum depth of the simulation
+    dt : float
+        timestep of the simulation
+    years : float
+        maximum time for simulation to be run
     temps : callable
         Function to determine the temperatures, defaults to 
         kanger_bounds
-    shift : float
+    shift : float, defualts to 0
         uniform shift to add to the initial conditions
+
+    Returns
+    -------
+    t_kang : np.array
+        1D array containing the timesteps for the simulation
+    u_kang : np.array
+        1D array containing the vertical grid for the simulation
+    u_kang : np.ndarray
+        2D array containing temperatures at each depth and timestep
+    conv : float
+        year at which the simulation converges to a steady state
     """
     # define bounds function to allow shift
     def shift_bounds(u_arr,time_arr):
        return kanger_bounds(u_arr,time_arr,shift)
     
     # run with everything, including debugging to check it works
-    x_kang,t_kang,u_kang = heatdiff(xmax=depth,tmax=years,dx=dx,dt=dt,
+    x_kang,t_kang,u_kang, conv = heatdiff(xmax=depth,tmax=years,dx=dx,dt=dt,
                                     bconds=shift_bounds,c2=c,init=0,debug=0)
-    return x_kang,t_kang,u_kang
+    return x_kang,t_kang,u_kang, conv
     
 def shift_temps():
     """
@@ -429,35 +636,51 @@ def shift_temps():
     individual and combined profiles of temperature.
 
     This function will produce the plots necessary for every question
-    as there is no point in running redundant code.
+    as there is no point in running redundant code and I wanted to include
+    the baseline climate simulation in the plots for question 3 for reference.
 
     """
     # depth is 0m to 100m with dx of 1
     dx    = 0.5             # unit of m
     depth = 100             # unit of m
-    dt    = 1*86400        # unit of seconds
-    years  = 365*60*86400   # unit of seconds
+    dt    = 1*86400         # unit of seconds
+    years  = 365*100*86400  # unit of seconds
     c      = 2.5e-7         # converted value in lab to m^2/s
     
     # plot temperature profile
-    fig, ax = plt.subplots(1,2,figsize=(12,8))
-    us,ds = [],[]
-    shifts=[3.,1.,.5,0.]
+    fig, ax = plt.subplots(1,2,figsize=(20,10))
+    us,ds = [],[]         # empty lists to store temperature and depth profiles for each shift
+    shifts=[3.,1.,.5,0.]  # how much should temperature be shifted by in each simulation
+    # loop over the global warming scenarios
     for shift in shifts:
-        fig2, ax2 = plt.subplots(1,2,figsize=(12,8))
-        x,t,u = permafrost_solve(dx,depth,dt,years,c,shift)
+        print(f'running simulation for {shift} shift')
+        # create figure for temperature profiles
+        fig2, ax2 = plt.subplots(1,2,figsize=(10,8))
+        # solve for Kangerlussuaq with given warming scenario
+        x,t,u,con = permafrost_solve(dx,depth,dt,years,c,shift)
+        # store the profiles for plotting later
         us.append(u)
         ds.append(x)
-        fig1, _ = heatmap(u,t,x,'years')
+        # make a heatmap showing the evolution of temperature with time
+        fig1, _ = heatmap(u,t,x,con,'years',title='Heatmap of Permafrost Temperature with Time at Kangerlussuaq, Greenland')
+        # plot the temperature profile and permafrost characteristics for each warming scenario
+        # note that because I didnt have time to handle different dtypes, the arrays must be wrapped in a list
         plot_all_profiles([u],[x],1*86400,ax2[0],[shift],colors=COLORS)
         plot_depth_thickness([u],[x],1*86400,ax2[1],[shift],colors=IBM_CMAP)
-
+        # title the profiles figure
+        fig2.suptitle(f'Permafrost Characteristics at Kangerlussuaq, Greenland (+{shift}$^\circ$C Warming)',fontweight='bold',fontsize=16)
+        # nice tight layout
+        fig1.tight_layout()
+        fig2.tight_layout()
+        # save figures
         fig1.savefig(f'{OUTPATH}/heatmap_{shift}.png',dpi=300)
         fig2.savefig(f'{OUTPATH}/temp_profile_{shift}.png',dpi=300)
-
-    plot_all_profiles(us,ds,1*86400,ax[0],shifts,colors=COLORS[::-1])
-    plot_depth_thickness(us,ds,1*86400,ax2[1],shifts,colors=IBM_CMAP)
-    
+    # plot the ensemble figure for question 3
+    plot_all_profiles(us,ds,1*86400,ax[0],shifts,colors=COLORS[::-1],plot_regions=False)
+    plot_depth_thickness(us,ds,1*86400,ax[1],shifts,colors=IBM_CMAP[::-1])
+    fig.suptitle('Permafrost Characteristics at Kangerlussuaq, Greenland under Warming Scenarios',fontweight='bold',fontsize=20)
+    fig.tight_layout()
+    # save the ensemble figure for question 3
     fig.savefig(f'{OUTPATH}/kang_warmed_heatmap.png',dpi=300)
 
 class TestHeatdiff(unittest.TestCase):
@@ -497,7 +720,7 @@ class TestHeatdiff(unittest.TestCase):
         sol10p3 = np.array(sol10p3).transpose()
 
         # solve the heat equation for the test case
-        x,t,solver_result = heatdiff(1,0.2,0.2,0.02)
+        x,t,solver_result,_ = heatdiff(1,0.2,0.2,0.02)
 
         # confirm the coefficients and the temperatures are equal to 1 decimal place
         np.testing.assert_allclose(solver_result, sol10p3, rtol=1E-5)
@@ -515,7 +738,7 @@ def main():
     if not OUTPATH:
         # will create a figures directory in your current working directory
         OUTPATH = f'{os.getcwd()}/laratt_lab04_figures'
-
+    # make the output directory for the figures in the lab
     Path(OUTPATH).mkdir(parents=True, exist_ok=True)
     shift_temps()
 
