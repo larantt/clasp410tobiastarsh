@@ -474,8 +474,8 @@ def plot_all_profiles(us,ds,dt,ax,shift,colors,plot_regions=True,title='Profile 
         winter = u_arr[:, loc:].min(axis=1)
         summer = u_arr[:, loc:].max(axis=1)
         # do plotting
-        ax.plot(summer,d_arr,c=cs[0],label=f'Summer ({s}{r"$^\circ$C warming"})',lw=3)
-        ax.plot(winter,d_arr,c=cs[1],label=f'Winter ({s}{r"$^\circ$C warming)"}',lw=3)
+        ax.plot(summer,d_arr,c=cs[0],label=f'Summer ({s}{r"$^circ$C warming"})',lw=3)
+        ax.plot(winter,d_arr,c=cs[1],label=f'Winter ({s}{r"$^circ$C warming)"}',lw=3)
 
         ax.set_ylim(0,60)  # helps with visualisation, could be un-hardcoded to find the bottom of the coldest profile
         ax.invert_yaxis() # invert y axis to show depth into ground
@@ -557,7 +557,7 @@ def plot_depth_thickness(us,ds,dt,ax,shift,colors,title='Thickness and Depth of 
         thickness = d_arr[depth_idx] - d_arr[active_idx]
         active = d_arr[active_idx]
        
-        perm_data[f'+{s}{r"$^\circ$C warming"}'] = (depth,thickness,active)
+        perm_data[f'+{s}{r"$^circ$C warming"}'] = (depth,thickness,active)
 
     # now plotting
     labels = ['Depth (m)','Thickness (m)','Active Layer (m)']
@@ -668,7 +668,7 @@ def shift_temps():
         plot_all_profiles([u],[x],1*86400,ax2[0],[shift],colors=COLORS)
         plot_depth_thickness([u],[x],1*86400,ax2[1],[shift],colors=IBM_CMAP)
         # title the profiles figure
-        fig2.suptitle(f'Permafrost Characteristics at Kangerlussuaq, Greenland (+{shift}{r"$^\circ$C "}Warming)',fontweight='bold',fontsize=16)
+        fig2.suptitle(f'Permafrost Characteristics at Kangerlussuaq, Greenland (+{shift}{r"$^circ$C "}Warming)',fontweight='bold',fontsize=16)
         # nice tight layout
         fig1.tight_layout()
         fig2.tight_layout()
