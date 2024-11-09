@@ -1,4 +1,4 @@
-#usr/bin/envs python3
+#!/usr/bin/envs python3
 """
 Lara Tobias-Tarsh (laratt)
 lab04.py - permafrost melting
@@ -9,10 +9,19 @@ heat diffusion equation model to answer questions about the seasonal
 dynamics of permafrost and the impact of warming on permafrost in
 the future.
 
-To execute the code in this lab simply run:
+To execute the code in this lab:
 ```
-    python lab04.py
+    python lab04.py [--outpath PATH]
 ```
+where PATH is an optional argument specifying where to save the output figures.
+If no path is specified, figures will be saved in a new directory in your
+current working directory.
+
+To execute the unit tests, cd to the lab04 directory then run
+```
+    python -m unittest discover
+```
+to run all unit tests in the directory.
 
 The simulation should produce 9 figures - a heatmap and vertical
 temperature profile for the baseline climate and the 0.5, 1 and 3
@@ -42,6 +51,8 @@ from pathlib import Path
 import unittest
 import numpy as np
 import matplotlib.pyplot as plt
+import argparse
+
 
 ### DEFINE USEFUL GLOBALS ###
 # Kangerlussuaq average temperature:
@@ -59,10 +70,29 @@ COLORS = [("#d5b3b3","#96b6f2"),
 # source: https://davidmathlogic.com/colorblind/#%23648FFF-%23785EF0-%23DC267F-%23FE6100-%23FFB000
 IBM_CMAP = ["#648FFF","#785EF0","#DC267F","#FE6100"]
 
-OUTPATH = "/Users/laratobias-tarsh/Documents/fa24/clasp410tobiastarsh/labs/lab04/figures"
-
 # initial configuration for debugging (changed dynamically in heatdiff if debugging is turned on)
 logging.basicConfig(level=logging.WARNING)
+
+def parse_args():
+    """
+    Parse command line arguments for the script.
+    
+    Returns
+    -------
+    argparse.Namespace
+        Parsed command line arguments
+    """
+    parser = argparse.ArgumentParser(
+        description='Solve and visualize permafrost melting using the heat equation.',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    parser.add_argument(
+        '--outpath',
+        type=str,
+        default=None,
+        help='Directory path where figures should be saved. If not specified, creates a new directory in current working directory.'
+    )
+    return parser.parse_args()
 
 def bold_axes(ax):
     """
@@ -668,7 +698,7 @@ def shift_temps():
         plot_all_profiles([u],[x],1*86400,ax2[0],[shift],colors=COLORS)
         plot_depth_thickness([u],[x],1*86400,ax2[1],[shift],colors=IBM_CMAP)
         # title the profiles figure
-        fig2.suptitle(f'Permafrost Characteristics at Kangerlussuaq, Greenland (+{shift}{r"$^\circ$C "}Warming)',fontweight='bold',fontsize=16)
+        fig2.suptitle(f'Permafrost Characteristics at Kangerlussuaq, Greenland (+{shift}{r"$^circ$C "}Warming)',fontweight='bold',fontsize=16)
         # nice tight layout
         fig1.tight_layout()
         fig2.tight_layout()
@@ -683,50 +713,6 @@ def shift_temps():
     # save the ensemble figure for question 3
     fig.savefig(f'{OUTPATH}/kang_warmed_heatmap.png',dpi=300)
 
-class TestHeatdiff(unittest.TestCase):
-    """
-    Class contains unit tests for the verification step in the 
-    lab methodology.
-
-    Adapted from https://www.geeksforgeeks.org/unit-testing-python-unittest/
-    """
-    def test_heateqn(self):
-        """
-        Unit test solves for wire test case given in lab code. This has 
-        initial conditions of 4*x - 4*(x**2) and boundary conditions set
-        to 0C.
-
-        Also creates and saves a heatmap of the solver solution and the
-        reference solution to be shown in the lab.
-
-        Parameters
-        ----------
-        self : Self@TestHeatdiff
-            unit test class object
-        """
-        # Solution to problem 10.3 from fink/matthews as a nested list:
-        sol10p3 = [[0.000000, 0.640000, 0.960000, 0.960000, 0.640000, 0.000000],
-        [0.000000, 0.480000, 0.800000, 0.800000, 0.480000, 0.000000],
-        [0.000000, 0.400000, 0.640000, 0.640000, 0.400000, 0.000000],
-        [0.000000, 0.320000, 0.520000, 0.520000, 0.320000, 0.000000],
-        [0.000000, 0.260000, 0.420000, 0.420000, 0.260000, 0.000000],
-        [0.000000, 0.210000, 0.340000, 0.340000, 0.210000, 0.000000],
-        [0.000000, 0.170000, 0.275000, 0.275000, 0.170000, 0.000000],
-        [0.000000, 0.137500, 0.222500, 0.222500, 0.137500, 0.000000],
-        [0.000000, 0.111250, 0.180000, 0.180000, 0.111250, 0.000000],
-        [0.000000, 0.090000, 0.145625, 0.145625, 0.090000, 0.000000],
-        [0.000000, 0.072812, 0.117813, 0.117813, 0.072812, 0.000000]]
-        # Convert to an array and transpose it to get correct ordering:
-        sol10p3 = np.array(sol10p3).transpose()
-
-        # solve the heat equation for the test case
-        x,t,solver_result,_ = heatdiff(1,0.2,0.2,0.02)
-
-        # confirm the coefficients and the temperatures are equal to 1 decimal place
-        np.testing.assert_allclose(solver_result, sol10p3, rtol=1E-5)
-        # print the date and time of the unit test for reference
-        now = datetime.datetime.now()
-        print(f'Unit test executed at {now.strftime("%Y-%m-%d %H:%M:%S")}')
 
 def main():
     """
@@ -734,21 +720,23 @@ def main():
     the figures in the lab report. Will execute all code in order.
     """
     # create path for figures to be saved if not already existing
+    args = parse_args()
     global OUTPATH
-    if not OUTPATH:
+    if args.outpath:
+        OUTPATH = args.outpath
+    else:
         # will create a figures directory in your current working directory
         OUTPATH = f'{os.getcwd()}/laratt_lab04_figures'
+    
     # make the output directory for the figures in the lab
     Path(OUTPATH).mkdir(parents=True, exist_ok=True)
+    print(f'Figures will be saved to: {OUTPATH}')
+    
     shift_temps()
 
 # run the main function when calling script
 if __name__ == "__main__":
-    # first run the unit tests to ensure everything works
-    # do not exit the script
-    print('testing n_layer_atmos solver')
-    unittest.main(exit=False)
-    # now execute the code for the class if everything works
+    # just execute main
     print('\nExecuting Lab Experiments')
     print('--------------------------')
     main()
