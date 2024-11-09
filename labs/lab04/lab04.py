@@ -17,6 +17,12 @@ where PATH is an optional argument specifying where to save the output figures.
 If no path is specified, figures will be saved in a new directory in your
 current working directory.
 
+To execute the unit tests, cd to the lab04 directory then run
+```
+    python -m unittest discover
+```
+to run all unit tests in the directory.
+
 The simulation should produce 9 figures - a heatmap and vertical
 temperature profile for the baseline climate and the 0.5, 1 and 3
 degree warming scenarios, and an ensemble plot showing all temperature
@@ -498,8 +504,8 @@ def plot_all_profiles(us,ds,dt,ax,shift,colors,plot_regions=True,title='Profile 
         winter = u_arr[:, loc:].min(axis=1)
         summer = u_arr[:, loc:].max(axis=1)
         # do plotting
-        ax.plot(summer,d_arr,c=cs[0],label=f'Summer ({s}{r"$^circ$C warming"})',lw=3)
-        ax.plot(winter,d_arr,c=cs[1],label=f'Winter ({s}{r"$^circ$C warming)"}',lw=3)
+        ax.plot(summer,d_arr,c=cs[0],label=f'Summer ({s}{r"$^\circ$C warming"})',lw=3)
+        ax.plot(winter,d_arr,c=cs[1],label=f'Winter ({s}{r"$^\circ$C warming)"}',lw=3)
 
         ax.set_ylim(0,60)  # helps with visualisation, could be un-hardcoded to find the bottom of the coldest profile
         ax.invert_yaxis() # invert y axis to show depth into ground
@@ -581,7 +587,7 @@ def plot_depth_thickness(us,ds,dt,ax,shift,colors,title='Thickness and Depth of 
         thickness = d_arr[depth_idx] - d_arr[active_idx]
         active = d_arr[active_idx]
        
-        perm_data[f'+{s}{r"$^circ$C warming"}'] = (depth,thickness,active)
+        perm_data[f'+{s}{r"$^\circ$C warming"}'] = (depth,thickness,active)
 
     # now plotting
     labels = ['Depth (m)','Thickness (m)','Active Layer (m)']
@@ -730,7 +736,7 @@ def main():
 
 # run the main function when calling script
 if __name__ == "__main__":
-    # now execute the code for the class if everything works
+    # just execute main
     print('\nExecuting Lab Experiments')
     print('--------------------------')
     main()
