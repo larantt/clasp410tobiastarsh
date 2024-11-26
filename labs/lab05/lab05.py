@@ -639,9 +639,9 @@ def question_three(epsilon_q3=0.7,lambda_q3=40.):
     _, cold_earth_10 = snowball_earth(lam=lambda_q3,emiss=epsilon_q3,temp=-60.,dynamic_albedo=True)
     _, cold_earth_20 = snowball_earth(lam=lambda_q3,emiss=epsilon_q3,temp=-60.,dynamic_albedo=True,tstop=20000)
     # flash freeze - albedo of 0.6
-    _, flash_earth_init = snowball_earth(lam=lambda_q3,emiss=epsilon_q3,albedo=0.6,dynamic_albedo=True,initialise_only=True)
-    _, flash_earth_10 = snowball_earth(lam=lambda_q3,emiss=epsilon_q3,albedo=0.6,dynamic_albedo=True)
-    _, flash_earth_20 = snowball_earth(lam=lambda_q3,emiss=epsilon_q3,albedo=0.6,dynamic_albedo=True,tstop=20000)
+    _, flash_earth_init = snowball_earth(lam=lambda_q3,emiss=epsilon_q3,albedo=0.6,dynamic_albedo=False,initialise_only=True)
+    _, flash_earth_10 = snowball_earth(lam=lambda_q3,emiss=epsilon_q3,albedo=0.6,dynamic_albedo=False)
+    _, flash_earth_20 = snowball_earth(lam=lambda_q3,emiss=epsilon_q3,albedo=0.6,dynamic_albedo=False,tstop=20000)
 
     # plotting
     fig,ax = plt.subplots(1,3,figsize=(18,5),sharey=True)
@@ -649,18 +649,21 @@ def question_three(epsilon_q3=0.7,lambda_q3=40.):
     ax[0].plot(lats,hot_earth_init,c=IBM_ORANGE,lw=3,alpha=0.5,ls='--',label='initial conditions')
     ax[0].plot(lats,hot_earth_10,c=IBM_ORANGE,lw=3,alpha=0.5,label='10,000 years')
     ax[0].plot(lats,hot_earth_20,c=IBM_ORANGE,lw=3,label='20,000 years')
+    ax[0].axhline(-10,c='k',lw=3,label='-10$^{\\circ}$C',ls='--')
 
     ax[1].plot(lats,flash_earth_init,c=IBM_PURPLE,lw=3,alpha=0.5,ls='--',label='initial conditions')
     ax[1].plot(lats,flash_earth_10,c=IBM_PURPLE,lw=3,alpha=0.5,label='10,000 years')
     ax[1].plot(lats,flash_earth_20,c=IBM_PURPLE,lw=3,label='20,000 years')
+    ax[1].axhline(-10,c='k',lw=3,label='-10$^{\\circ}$C',ls='--')
 
     ax[2].plot(lats,cold_earth_init,c=IBM_BLUE,lw=3,alpha=0.5,ls='--',label='initial conditions')
     ax[2].plot(lats,cold_earth_10,c=IBM_BLUE,lw=3,alpha=0.5,label='10,000 years')
     ax[2].plot(lats,cold_earth_20,c=IBM_BLUE,lw=3,label='20,00 years')
+    ax[2].axhline(-10,c='k',lw=3,label='-10$^{\\circ}$C',ls='--')
 
-    for axs,title in zip(ax.flatten(),['Hot Earth','Cold Earth','Flash Freeze']):
+    for axs,title in zip(ax.flatten(),['Hot Earth','Flash Freeze','Cold Earth']):
         axs.set_title(title,loc='left',fontweight='bold',fontsize=12)
-        axs.legend(frameon=False,prop={'weight': 'bold','size':'8'},ncols=3)
+        axs.legend(frameon=False,prop={'weight': 'bold','size':'8'},ncols=2)
         axs.set_xlabel('Latitude ($^{\\circ}$)',fontweight='bold')
         fix_latitude_labels(lats,axs)
         bold_axes(axs)
@@ -702,7 +705,7 @@ def question_four(epsilon_q4=0.7,lambda_q4=40.):
         mean_temps.append(np.mean(t))
     
     fig,ax = plt.subplots(1,1,figsize=(12,8))
-    ax.plot(gammas,mean_temps,c=IBM_BLUE,lw=3,marker='o')
+    ax.plot(gammas,mean_temps,c=IBM_BLUE,lw=3)
     ax.set_xlabel('Gamma',fontweight='bold',fontsize=12)
     ax.set_ylabel('Temperature ($^{\\circ}$C)',fontweight='bold',fontsize=12)
     ax.set_title('Mean Global Surface Temperature as a Function of Solar Multiplier',
